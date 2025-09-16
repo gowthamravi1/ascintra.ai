@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -32,7 +32,7 @@ interface ServiceStats {
   coverage: number
 }
 
-const resources: Resource[] = [
+const fallbackResources: Resource[] = [
   {
     id: "i-1234567890abcdef0",
     name: "web-server-prod-01",
@@ -114,8 +114,61 @@ export default function InventoryPage() {
   const [serviceFilter, setServiceFilter] = useState("all")
   const [regionFilter, setRegionFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [resourcesData, setResourcesData] = useState<Resource[]>(fallbackResources)
+  const [protectedCount, setProtectedCount] = useState(0)
+  const [unprotectedCount, setUnprotectedCount] = useState(0)
 
-  const filteredResources = resources.filter((resource) => {
+  const toRelative = (val?: string | number | null): string | undefined => {
+    if (val === undefined || val === null) return undefined
+    const d = typeof val === 'number' ? new Date(val * 1000) : new Date(val)
+    if (isNaN(d.getTime())) return undefined
+    const ms = Date.now() - d.getTime()
+    const mins = Math.floor(ms / 60000)
+    if (mins < 60) return `${mins} minutes ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs} hours ago`
+    const days = Math.floor(hrs / 24)
+    return `${days} days ago`
+  }
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/tenant/inventory", { cache: "no-store" })
+        if (!res.ok) return
+        const data = await res.json()
+        const items = Array.isArray(data?.items) ? data.items : []
+        const mapped: Resource[] = items.map((it: any) => {
+          const statusRaw = String(it.status ?? "unprotected").toLowerCase()
+          const status: Resource["status"] = statusRaw === "protected" ? "protected" : statusRaw === "partial" ? "partial" : "unprotected"
+          return {
+            id: String(it.id ?? ""),
+            name: String(it.name ?? it.id ?? "unknown"),
+            type: String(it.type ?? "unknown"),
+            service: String(it.service ?? it.type ?? "unknown"),
+            region: String(it.region ?? "unknown"),
+            status,
+            lastBackup: toRelative(it.last_backup),
+            rpo: "-",
+            rto: "-",
+            criticality: status === "unprotected" ? "high" : "low",
+          }
+        })
+        if (mapped.length) {
+          setResourcesData(mapped)
+          const prot = mapped.filter((r) => r.status === "protected").length
+          const unprot = mapped.filter((r) => r.status === "unprotected").length
+          setProtectedCount(prot)
+          setUnprotectedCount(unprot)
+        }
+      } catch (e) {
+        // ignore and keep fallback
+      }
+    }
+    load()
+  }, [])
+
+  const filteredResources = resourcesData.filter((resource) => {
     const matchesSearch =
       resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resource.type.toLowerCase().includes(searchTerm.toLowerCase())
@@ -192,7 +245,7 @@ export default function InventoryPage() {
             <CardTitle className="text-sm font-medium">Total Resources</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">325</div>
+            <div className="text-2xl font-bold">{resourcesData.length}</div>
             <p className="text-xs text-muted-foreground">Across all services</p>
           </CardContent>
         </Card>
@@ -201,8 +254,10 @@ export default function InventoryPage() {
             <CardTitle className="text-sm font-medium">Protected</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">282</div>
-            <p className="text-xs text-muted-foreground">86.8% coverage</p>
+            <div className="text-2xl font-bold text-success">{protectedCount}</div>
+            <p className="text-xs text-muted-foreground">
+              {resourcesData.length ? `${Math.round((protectedCount / resourcesData.length) * 1000) / 10}% coverage` : "0% coverage"}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -210,7 +265,7 @@ export default function InventoryPage() {
             <CardTitle className="text-sm font-medium">Unprotected</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-critical">43</div>
+            <div className="text-2xl font-bold text-critical">{unprotectedCount}</div>
             <p className="text-xs text-muted-foreground">Needs attention</p>
           </CardContent>
         </Card>
@@ -219,7 +274,7 @@ export default function InventoryPage() {
             <CardTitle className="text-sm font-medium">Critical Assets</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-warning">67</div>
+            <div className="text-2xl font-bold text-warning">{resourcesData.filter((r) => r.criticality === "high").length}</div>
             <p className="text-xs text-muted-foreground">High priority</p>
           </CardContent>
         </Card>

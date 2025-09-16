@@ -26,17 +26,31 @@ export default function ConnectAWSAccount() {
   const [currentStep, setCurrentStep] = useState(1)
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "connecting" | "success" | "error">("idle")
+  const [accountId, setAccountId] = useState("")
+  const [accountName, setAccountName] = useState("")
+  const [primaryRegion, setPrimaryRegion] = useState("")
+  const [roleArn, setRoleArn] = useState("")
 
   const handleConnect = async () => {
     setIsConnecting(true)
     setConnectionStatus("connecting")
-
-    // Simulate connection process
-    setTimeout(() => {
-      setConnectionStatus("success")
+    try {
+      const res = await fetch("/api/accounts/test-connection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "aws", account_identifier: accountId, aws_role_arn: roleArn }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data?.ok) {
+        setConnectionStatus("success")
+      } else {
+        setConnectionStatus("error")
+      }
+    } catch (e) {
+      setConnectionStatus("error")
+    } finally {
       setIsConnecting(false)
-      setCurrentStep(4)
-    }, 3000)
+    }
   }
 
   const steps = [
@@ -156,15 +170,30 @@ export default function ConnectAWSAccount() {
             <CardContent className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">AWS Account ID</label>
-                <Input placeholder="123456789012" className="bg-white/50" />
+                <Input
+                  placeholder="123456789012"
+                  className="bg-white/50"
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Account Name (Optional)</label>
-                <Input placeholder="Production Account" className="bg-white/50" />
+                <Input
+                  placeholder="Production Account"
+                  className="bg-white/50"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Primary Region</label>
-                <Input placeholder="us-east-1" className="bg-white/50" />
+                <Input
+                  placeholder="us-east-1"
+                  className="bg-white/50"
+                  value={primaryRegion}
+                  onChange={(e) => setPrimaryRegion(e.target.value)}
+                />
               </div>
               <Button
                 onClick={() => setCurrentStep(2)}
@@ -296,6 +325,8 @@ export default function ConnectAWSAccount() {
                 <Input
                   placeholder="arn:aws:iam::123456789012:role/RecoveryVault-DiscoveryRole"
                   className="bg-white/50"
+                  value={roleArn}
+                  onChange={(e) => setRoleArn(e.target.value)}
                 />
                 <p className="text-xs text-gray-500">Paste the Role ARN from your CloudFormation stack outputs</p>
               </div>
@@ -485,7 +516,28 @@ export default function ConnectAWSAccount() {
               <Button variant="outline" onClick={() => setCurrentStep(3)}>
                 Back
               </Button>
-              <Button className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
+              <Button
+                className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                onClick={async () => {
+                  try {
+                    await fetch("/api/accounts", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        provider: "aws",
+                        account_identifier: accountId,
+                        name: accountName,
+                        primary_region: primaryRegion,
+                        aws_role_arn: roleArn,
+                        discovery_enabled: true,
+                        discovery_options: { ec2: true, rds: true, s3: true, ebs: true },
+                      }),
+                    })
+                  } catch (e) {
+                    // ignore for now
+                  }
+                }}
+              >
                 Complete Setup
                 <CheckCircle className="h-4 w-4 ml-2" />
               </Button>

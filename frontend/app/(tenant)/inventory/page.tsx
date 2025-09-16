@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Filter, Eye, ExternalLink } from "lucide-react"
 
-const resources = [
+type Resource = {
+  id: string
+  type: string
+  region: string
+  tags: string[]
+  lastChange?: string
+  findings?: number
+  severity: "critical" | "high" | "medium" | "low" | "none"
+}
+
+const fallbackResources: Resource[] = [
   {
     id: "i-0123456789abcdef0",
     type: "EC2 Instance",
@@ -68,10 +78,33 @@ export default function InventoryPage() {
   const [selectedRegion, setSelectedRegion] = useState("All Regions")
   const [selectedSeverity, setSelectedSeverity] = useState("All Severities")
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [resourcesData, setResourcesData] = useState<Resource[]>(fallbackResources)
 
-  const allTags = Array.from(new Set(resources.flatMap((r) => r.tags)))
+  const allTags = Array.from(new Set(resourcesData.flatMap((r) => r.tags)))
 
-  const filteredResources = resources.filter((resource) => {
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/tenant/inventory", { cache: "no-store" })
+        if (!res.ok) return
+        const data = await res.json()
+        const items = Array.isArray(data?.items) ? data.items : []
+        const mapped: Resource[] = items.map((it: any) => ({
+          id: String(it.id ?? ""),
+          type: String(it.type ?? "unknown"),
+          region: String(it.region ?? "unknown"),
+          tags: Object.entries(it.tags ?? {}).map(([k, v]) => `${k}:${v}`),
+          severity: "none",
+        }))
+        if (mapped.length) setResourcesData(mapped)
+      } catch (e) {
+        // ignore
+      }
+    }
+    load()
+  }, [])
+
+  const filteredResources = resourcesData.filter((resource) => {
     const matchesSearch =
       resource.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resource.type.toLowerCase().includes(searchTerm.toLowerCase())
@@ -262,7 +295,7 @@ export default function InventoryPage() {
             <CardHeader>
               <CardTitle>Resources</CardTitle>
               <CardDescription>
-                Showing {filteredResources.length} of {resources.length} resources
+                Showing {filteredResources.length} of {resourcesData.length} resources
               </CardDescription>
             </CardHeader>
             <CardContent>
