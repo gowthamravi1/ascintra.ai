@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,34 +8,12 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Search,
-  Download,
-  RefreshCw,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Play,
-  Eye,
-  Calendar,
-  Database,
-  Shield,
-  Activity,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-} from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Search, RefreshCw, Clock, CheckCircle, XCircle, AlertTriangle, Play, Eye, Calendar, Database, Shield, Activity, TrendingUp, TrendingDown, Minus } from "lucide-react"
 
-interface ScanHistory {
+type Findings = { critical: number; high: number; medium: number; low: number }
+
+type Scan = {
   id: string
   accountName: string
   accountId: string
@@ -43,115 +21,27 @@ interface ScanHistory {
   status: "completed" | "running" | "failed" | "cancelled"
   startTime: string
   endTime?: string
+  durationSec: number
   duration: string
   resourcesScanned: number
-  resourcesFound: number
   backupResourcesFound: number
-  findings: {
-    critical: number
-    high: number
-    medium: number
-    low: number
-  }
+  findings: Findings
   recoveryScore: number
   backupCoverage: number
   triggeredBy: "scheduled" | "manual" | "api" | "webhook"
   region: string
   progress?: number
+  attachmentUrl?: string
 }
 
-const scanHistory: ScanHistory[] = [
-  {
-    id: "scan-001",
-    accountName: "Production Account",
-    accountId: "123456789012",
-    type: "full",
-    status: "completed",
-    startTime: "2024-01-08 14:30:00",
-    endTime: "2024-01-08 15:15:23",
-    duration: "45m 23s",
-    resourcesScanned: 1247,
-    resourcesFound: 1247,
-    backupResourcesFound: 1089,
-    findings: { critical: 3, high: 12, medium: 28, low: 156 },
-    recoveryScore: 87,
-    backupCoverage: 87.3,
-    triggeredBy: "scheduled",
-    region: "us-east-1",
-  },
-  {
-    id: "scan-002",
-    accountName: "Staging Account",
-    accountId: "123456789013",
-    type: "incremental",
-    status: "running",
-    startTime: "2024-01-08 15:45:00",
-    duration: "12m 45s",
-    resourcesScanned: 234,
-    resourcesFound: 234,
-    backupResourcesFound: 183,
-    findings: { critical: 0, high: 2, medium: 8, low: 23 },
-    recoveryScore: 78,
-    backupCoverage: 78.2,
-    triggeredBy: "manual",
-    region: "us-west-2",
-    progress: 65,
-  },
-  {
-    id: "scan-003",
-    accountName: "Development Account",
-    accountId: "123456789014",
-    type: "compliance",
-    status: "failed",
-    startTime: "2024-01-08 10:15:00",
-    endTime: "2024-01-08 10:23:12",
-    duration: "8m 12s",
-    resourcesScanned: 0,
-    resourcesFound: 0,
-    backupResourcesFound: 0,
-    findings: { critical: 0, high: 0, medium: 0, low: 0 },
-    recoveryScore: 0,
-    backupCoverage: 0,
-    triggeredBy: "api",
-    region: "eu-west-1",
-  },
-  {
-    id: "scan-004",
-    accountName: "Production Account",
-    accountId: "123456789012",
-    type: "backup-validation",
-    status: "completed",
-    startTime: "2024-01-07 22:00:00",
-    endTime: "2024-01-07 23:12:45",
-    duration: "1h 12m 45s",
-    resourcesScanned: 1089,
-    resourcesFound: 1089,
-    backupResourcesFound: 1089,
-    findings: { critical: 5, high: 18, medium: 45, low: 203 },
-    recoveryScore: 92,
-    backupCoverage: 100,
-    triggeredBy: "scheduled",
-    region: "us-east-1",
-  },
-  {
-    id: "scan-005",
-    accountName: "Backup Account",
-    accountId: "123456789015",
-    type: "full",
-    status: "completed",
-    startTime: "2024-01-07 16:30:00",
-    endTime: "2024-01-07 17:23:45",
-    duration: "53m 45s",
-    resourcesScanned: 456,
-    resourcesFound: 456,
-    backupResourcesFound: 306,
-    findings: { critical: 1, high: 4, medium: 12, low: 67 },
-    recoveryScore: 71,
-    backupCoverage: 67.1,
-    triggeredBy: "manual",
-    region: "ap-southeast-1",
-  },
-]
+const toDuration = (seconds: number) => {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}h ${m}m ${s}s`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -218,9 +108,51 @@ export default function DiscoveryHistory() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
   const [accountFilter, setAccountFilter] = useState("all")
-  const [selectedScan, setSelectedScan] = useState<ScanHistory | null>(null)
+  const [selectedScan, setSelectedScan] = useState<Scan | null>(null)
+  const [scans, setScans] = useState<Scan[]>([])
+  const [metrics, setMetrics] = useState({ total: 0, successRate: 0, avgDuration: 0, resources: 0 })
 
-  const filteredScans = scanHistory.filter((scan) => {
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/tenant/discovery/history", { cache: "no-store" })
+        if (!res.ok) return
+        const data = await res.json()
+        const items = Array.isArray(data?.scans) ? data.scans : []
+        const mapped: Scan[] = items.map((s: any) => ({
+          id: String(s.id),
+          accountName: s.account_name,
+          accountId: s.account_id,
+          type: s.type,
+          status: s.status,
+          startTime: s.start_time,
+          endTime: s.end_time || undefined,
+          durationSec: Number(s.duration_seconds ?? 0),
+          duration: toDuration(Number(s.duration_seconds ?? 0)),
+          resourcesScanned: Number(s.resources_scanned ?? 0),
+          backupResourcesFound: Number(s.resources_with_backups ?? 0),
+          findings: s.findings || { critical: 0, high: 0, medium: 0, low: 0 },
+          recoveryScore: Number(s.recovery_score ?? 0),
+          backupCoverage: Number(s.backup_coverage ?? 0),
+          triggeredBy: s.triggered_by,
+          region: s.region,
+          progress: s.progress ?? undefined,
+          attachmentUrl: s.attachment_url || undefined,
+        }))
+        setScans(mapped)
+        const sum = data?.summary || {}
+        setMetrics({
+          total: Number(sum.total_scans ?? mapped.length),
+          successRate: Number(sum.success_rate ?? 0),
+          avgDuration: Number(sum.avg_duration_seconds ?? 0),
+          resources: Number(sum.resources_scanned ?? 0),
+        })
+      } catch {}
+    }
+    load()
+  }, [])
+
+  const filteredScans = scans.filter((scan) => {
     const matchesSearch =
       scan.accountName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       scan.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -233,46 +165,28 @@ export default function DiscoveryHistory() {
     return matchesSearch && matchesStatus && matchesType && matchesAccount
   })
 
-  const uniqueAccounts = Array.from(new Set(scanHistory.map((scan) => scan.accountName)))
-
-  const completedScans = scanHistory.filter((scan) => scan.status === "completed")
-  const avgDuration =
-    completedScans.length > 0
-      ? completedScans.reduce((sum, scan) => {
-          const duration = scan.duration.includes("h")
-            ? Number.parseInt(scan.duration) * 60 + Number.parseInt(scan.duration.split("h ")[1])
-            : Number.parseInt(scan.duration)
-          return sum + duration
-        }, 0) / completedScans.length
-      : 0
-
-  const successRate = scanHistory.length > 0 ? (completedScans.length / scanHistory.length) * 100 : 0
-
-  const totalResourcesScanned = scanHistory.reduce((sum, scan) => sum + scan.resourcesScanned, 0)
+  const uniqueAccounts = Array.from(new Set(scans.map((scan) => scan.accountName)))
+  const avgMinutes = metrics.avgDuration / 60
+  const successRate = metrics.successRate
+  const totalResourcesScanned = metrics.resources
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Discovery History</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            View and analyze your AWS resource discovery and backup validation history
-          </p>
+          <p className="text-gray-600 dark:text-gray-400">View and analyze your AWS resource discovery and backup validation history</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+          <Button variant="outline" size="sm" onClick={() => location.reload()}>
+            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
           <Button size="sm">
-            <Play className="h-4 w-4 mr-2" />
-            New Scan
+            <Play className="h-4 w-4 mr-2" /> New Scan
           </Button>
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -280,14 +194,12 @@ export default function DiscoveryHistory() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{scanHistory.length}</div>
+            <div className="text-2xl font-bold">{metrics.total}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" />
-              +12 this week
+              <TrendingUp className="h-3 w-3" /> +12 this week
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
@@ -296,26 +208,22 @@ export default function DiscoveryHistory() {
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{successRate.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" />
-              +2.1% from last month
+              <TrendingUp className="h-3 w-3" /> +2.1% from last month
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Math.round(avgDuration)}m</div>
+            <div className="text-2xl font-bold">{Math.round(avgMinutes)}m</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <TrendingDown className="h-3 w-3" />
-              -5m from last week
+              <TrendingDown className="h-3 w-3" /> -5m from last week
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Resources Scanned</CardTitle>
@@ -328,12 +236,10 @@ export default function DiscoveryHistory() {
         </Card>
       </div>
 
-      {/* Filters and Search */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Discovery Scan History
+            <Activity className="h-5 w-5" /> Discovery Scan History
           </CardTitle>
           <CardDescription>View and filter your resource discovery and backup validation history</CardDescription>
         </CardHeader>
@@ -342,31 +248,20 @@ export default function DiscoveryHistory() {
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by account, scan ID, or account ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+                <Input placeholder="Search by account, scan ID, or account ID..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8" />
               </div>
             </div>
             <Select value={accountFilter} onValueChange={setAccountFilter}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by account" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filter by account" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Accounts</SelectItem>
                 {uniqueAccounts.map((account) => (
-                  <SelectItem key={account} value={account}>
-                    {account}
-                  </SelectItem>
+                  <SelectItem key={account} value={account}>{account}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
@@ -376,9 +271,7 @@ export default function DiscoveryHistory() {
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="full">Full Scan</SelectItem>
@@ -387,14 +280,9 @@ export default function DiscoveryHistory() {
                 <SelectItem value="backup-validation">Backup Validation</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
           </div>
 
-          {/* Scan History Table */}
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -406,186 +294,134 @@ export default function DiscoveryHistory() {
                   <TableHead>Resources</TableHead>
                   <TableHead>Recovery Score</TableHead>
                   <TableHead>Backup Coverage</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredScans.map((scan) => (
                   <TableRow key={scan.id}>
                     <TableCell>
-                      <div className="space-y-1">
+                      <div>
                         <div className="font-medium">{scan.id}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Started: {scan.startTime}</div>
-                        {scan.status === "running" && scan.progress && (
-                          <div className="space-y-1">
-                            <Progress value={scan.progress} className="h-1" />
-                            <div className="text-xs text-gray-500">{scan.progress}% complete</div>
-                          </div>
+                        <div className="text-xs text-muted-foreground">Started: {scan.startTime}</div>
+                        {scan.progress !== undefined && (
+                          <div className="text-[10px] text-blue-600 mt-1">{scan.progress}% complete</div>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{scan.accountName}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {scan.accountId} • {scan.region}
-                        </div>
-                      </div>
+                      <div className="text-sm">{scan.accountName}</div>
+                      <div className="text-xs text-muted-foreground">{scan.accountId} • {scan.region}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getTypeIcon(scan.type)}
-                        {getTypeBadge(scan.type)}
-                      </div>
+                      <div className="flex items-center gap-2">{getTypeIcon(scan.type)} {getTypeBadge(scan.type)}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(scan.status)}
-                        {getStatusBadge(scan.status)}
-                      </div>
+                      <div className="flex items-center gap-2">{getStatusIcon(scan.status)} {getStatusBadge(scan.status)}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{scan.duration}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">{scan.triggeredBy}</div>
-                      </div>
+                      <div className="text-sm font-medium">{scan.duration}</div>
+                      <div className="text-xs text-muted-foreground">{scan.triggeredBy}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{scan.resourcesScanned.toLocaleString()}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {scan.backupResourcesFound} with backups
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium">{scan.resourcesScanned.toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{scan.backupResourcesFound} with backups</div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium">{scan.recoveryScore}</div>
-                        <div className="w-12 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div className="bg-primary h-2 rounded-full" style={{ width: `${scan.recoveryScore}%` }} />
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium">{scan.recoveryScore}</div>
+                      <Progress value={scan.recoveryScore} className="h-2 mt-1" />
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium">{scan.backupCoverage.toFixed(1)}%</div>
-                        <div className="w-12 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div className="bg-green-500 h-2 rounded-full" style={{ width: `${scan.backupCoverage}%` }} />
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium">{scan.backupCoverage.toFixed(1)}%</div>
+                      <Progress value={scan.backupCoverage} className="h-2 mt-1" />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-right">
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedScan(scan)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/tenant/discovery/history/${scan.id}`, { cache: "no-store" })
+                                if (res.ok) {
+                                  const s = await res.json()
+                                  const mapped: Scan = {
+                                    id: s.id,
+                                    accountName: s.account_name,
+                                    accountId: s.account_id,
+                                    type: s.type,
+                                    status: s.status,
+                                    startTime: s.start_time,
+                                    endTime: s.end_time || undefined,
+                                    durationSec: Number(s.duration_seconds ?? 0),
+                                    duration: toDuration(Number(s.duration_seconds ?? 0)),
+                                    resourcesScanned: Number(s.resources_scanned ?? 0),
+                                    backupResourcesFound: Number(s.resources_with_backups ?? 0),
+                                    findings: s.findings || { critical: 0, high: 0, medium: 0, low: 0 },
+                                    recoveryScore: Number(s.recovery_score ?? 0),
+                                    backupCoverage: Number(s.backup_coverage ?? 0),
+                                    triggeredBy: s.triggered_by,
+                                    region: s.region,
+                                    progress: s.progress ?? undefined,
+                                    attachmentUrl: s.attachment_url || undefined,
+                                  }
+                                  setSelectedScan(mapped)
+                                } else {
+                                  setSelectedScan(scan)
+                                }
+                              } catch {
+                                setSelectedScan(scan)
+                              }
+                            }}
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
-                          <DialogHeader>
-                            <DialogTitle>Scan Details: {scan.id}</DialogTitle>
-                            <DialogDescription>Detailed information about the discovery scan</DialogDescription>
-                          </DialogHeader>
+                        <DialogContent className="max-w-4xl">
                           {selectedScan && (
                             <div className="space-y-6">
-                              <div className="grid gap-4 md:grid-cols-2">
+                              <DialogHeader>
+                                <DialogTitle>Scan Details: {selectedScan.id}</DialogTitle>
+                                <DialogDescription>Detailed information about the discovery scan</DialogDescription>
+                              </DialogHeader>
+                              {selectedScan.attachmentUrl && (
+                                <div>
+                                  <img src={selectedScan.attachmentUrl} alt="Scan attachment" className="rounded border" />
+                                </div>
+                              )}
+                              <div className="grid gap-6 md:grid-cols-2">
                                 <div className="space-y-2">
                                   <h4 className="font-medium">Scan Information</h4>
                                   <div className="space-y-1 text-sm">
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Scan ID:</span>
-                                      <span>{selectedScan.id}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Type:</span>
-                                      <span>{selectedScan.type}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Status:</span>
-                                      <span>{selectedScan.status}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Duration:</span>
-                                      <span>{selectedScan.duration}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Triggered By:</span>
-                                      <span>{selectedScan.triggeredBy}</span>
-                                    </div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Scan ID:</span><span>{selectedScan.id}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Type:</span><span>{selectedScan.type}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Status:</span><span>{selectedScan.status}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Duration:</span><span>{selectedScan.duration}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Triggered By:</span><span>{selectedScan.triggeredBy}</span></div>
                                   </div>
                                 </div>
                                 <div className="space-y-2">
                                   <h4 className="font-medium">Account Information</h4>
                                   <div className="space-y-1 text-sm">
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Account:</span>
-                                      <span>{selectedScan.accountName}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Account ID:</span>
-                                      <span>{selectedScan.accountId}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600 dark:text-gray-400">Region:</span>
-                                      <span>{selectedScan.region}</span>
-                                    </div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Account:</span><span>{selectedScan.accountName}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Account ID:</span><span>{selectedScan.accountId}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Region:</span><span>{selectedScan.region}</span></div>
                                   </div>
                                 </div>
                               </div>
-
                               <div className="grid gap-4 md:grid-cols-3">
-                                <Card>
-                                  <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm">Resources Scanned</CardTitle>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <div className="text-2xl font-bold">
-                                      {selectedScan.resourcesScanned.toLocaleString()}
-                                    </div>
-                                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                                      {selectedScan.backupResourcesFound} with backups
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                                <Card>
-                                  <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm">Recovery Score</CardTitle>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <div className="text-2xl font-bold">{selectedScan.recoveryScore}</div>
-                                    <Progress value={selectedScan.recoveryScore} className="h-2 mt-2" />
-                                  </CardContent>
-                                </Card>
-                                <Card>
-                                  <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm">Backup Coverage</CardTitle>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <div className="text-2xl font-bold">{selectedScan.backupCoverage.toFixed(1)}%</div>
-                                    <Progress value={selectedScan.backupCoverage} className="h-2 mt-2" />
-                                  </CardContent>
-                                </Card>
+                                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Resources Scanned</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{selectedScan.resourcesScanned.toLocaleString()}</div><div className="text-sm text-muted-foreground">{selectedScan.backupResourcesFound} with backups</div></CardContent></Card>
+                                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Recovery Score</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{selectedScan.recoveryScore}</div><Progress value={selectedScan.recoveryScore} className="h-2 mt-2" /></CardContent></Card>
+                                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Backup Coverage</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{selectedScan.backupCoverage.toFixed(1)}%</div><Progress value={selectedScan.backupCoverage} className="h-2 mt-2" /></CardContent></Card>
                               </div>
-
                               <div className="space-y-2">
                                 <h4 className="font-medium">Recovery Findings</h4>
                                 <div className="grid gap-2 md:grid-cols-4">
-                                  <div className="flex items-center justify-between p-2 border rounded">
-                                    <span className="text-sm">Critical</span>
-                                    <Badge variant="destructive">{selectedScan.findings.critical}</Badge>
-                                  </div>
-                                  <div className="flex items-center justify-between p-2 border rounded">
-                                    <span className="text-sm">High</span>
-                                    <Badge variant="warning">{selectedScan.findings.high}</Badge>
-                                  </div>
-                                  <div className="flex items-center justify-between p-2 border rounded">
-                                    <span className="text-sm">Medium</span>
-                                    <Badge variant="info">{selectedScan.findings.medium}</Badge>
-                                  </div>
-                                  <div className="flex items-center justify-between p-2 border rounded">
-                                    <span className="text-sm">Low</span>
-                                    <Badge variant="secondary">{selectedScan.findings.low}</Badge>
-                                  </div>
+                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Critical</span><Badge variant="destructive">{selectedScan.findings.critical}</Badge></div>
+                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">High</span><Badge variant="warning">{selectedScan.findings.high}</Badge></div>
+                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Medium</span><Badge variant="info">{selectedScan.findings.medium}</Badge></div>
+                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Low</span><Badge variant="secondary">{selectedScan.findings.low}</Badge></div>
                                 </div>
                               </div>
                             </div>
@@ -603,3 +439,4 @@ export default function DiscoveryHistory() {
     </div>
   )
 }
+

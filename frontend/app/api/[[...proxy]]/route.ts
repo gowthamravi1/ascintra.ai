@@ -27,23 +27,27 @@ async function forward(req: NextRequest, path: string, method: string) {
   return new Response(text, { status: res.status, headers: respHeaders });
 }
 
-export async function GET(req: NextRequest, { params }: { params: { proxy: string[] } }) {
-  return forward(req, (params.proxy || []).join("/"), "GET");
+export async function GET(req: NextRequest, ctx: { params?: { proxy?: string[] } }) {
+  const p = ctx?.params?.proxy ?? [];
+  return forward(req, p.join("/"), "GET");
 }
 
-export async function POST(req: NextRequest, { params }: { params: { proxy: string[] } }) {
-  return forward(req, (params.proxy || []).join("/"), "POST");
+export async function POST(req: NextRequest, ctx: { params?: { proxy?: string[] } }) {
+  const p = ctx?.params?.proxy ?? [];
+  return forward(req, p.join("/"), "POST");
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { proxy: string[] } }) {
-  return forward(req, (params.proxy || []).join("/"), "PUT");
+export async function PUT(req: NextRequest, ctx: { params?: { proxy?: string[] } }) {
+  const p = ctx?.params?.proxy ?? [];
+  return forward(req, p.join("/"), "PUT");
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { proxy: string[] } }) {
-  return forward(req, (params.proxy || []).join("/"), "PATCH");
+export async function PATCH(req: NextRequest, ctx: { params?: { proxy?: string[] } }) {
+  const p = ctx?.params?.proxy ?? [];
+  return forward(req, p.join("/"), "PATCH");
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { proxy: string[] } }) {
-  return forward(req, (params.proxy || []).join("/"), "DELETE");
+export async function DELETE(req: NextRequest, ctx: { params?: { proxy?: string[] } }) {
+  const p = ctx?.params?.proxy ?? [];
+  return forward(req, p.join("/"), "DELETE");
 }
-

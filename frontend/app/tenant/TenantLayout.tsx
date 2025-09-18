@@ -64,6 +64,7 @@ const navigation: NavigationItem[] = [
     icon: Search,
     children: [
       { name: "Connect Sources", href: "/tenant/discovery/connect", icon: Zap },
+      { name: "Connected Accounts", href: "/tenant/discovery/connect/list", icon: Users },
       { name: "Discovery History", href: "/tenant/discovery/history", icon: FileText },
     ],
   },
@@ -177,6 +178,8 @@ export function TenantLayout({ children }: TenantLayoutProps) {
     )
   }
 
+  const isChildActive = (href: string) => pathname === href
+
   const NavigationItems = ({ items, mobile = false }: { items: NavigationItem[]; mobile?: boolean }) => (
     <>
       {items.map((item) => {
@@ -237,12 +240,12 @@ export function TenantLayout({ children }: TenantLayoutProps) {
               {isExpanded && (!sidebarCollapsed || mobile) && (
                 <div className="ml-6 space-y-1">
                   {item.children.map((child) => (
-                    <Link
+                  <Link
                       key={child.name}
                       href={child.href}
                       className={cn(
                         "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                        isActiveRoute(child.href)
+                        isChildActive(child.href)
                           ? "bg-blue-100 text-blue-700"
                           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
                       )}

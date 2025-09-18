@@ -15,6 +15,7 @@ Monorepo with a Next.js 14 frontend and a FastAPI backend with mock endpoints. A
 - Backend: http://localhost:8000 (health: `/healthz`, APIs under `/api/*`)
 - ArangoDB: expected to be running on the host at http://localhost:8529 (we point to it from the backend using `host.docker.internal`).
 - Postgres (Compose): `postgres:5432` (db/user/pass: `ascintra`)
+- pgAdmin (Compose): http://localhost:5050 (login `admin@example.com` / `admin`)
 
 The frontend proxies any `/api/*` requests to the backend (configured by `BACKEND_URL`; Compose sets it to `http://backend:8000`). In the browser, call relative paths like `/api/admin/dashboard`.
 Compose wires the backend to an existing ArangoDB running on your host via `ARANGO_URL=http://host.docker.internal:8529`. Set `ARANGO_DB`, `ARANGO_USER`, and `ARANGO_PASSWORD` to match your instance. If the `fix`/`inventory` collections are absent, the backend returns mock data.
@@ -30,6 +31,22 @@ Compose wires the backend to an existing ArangoDB running on your host via `ARAN
   - `docker compose run --rm backend alembic revision -m "desc" --autogenerate`
   - `docker compose run --rm backend alembic upgrade head`
   - Alembic reads the DB URL from FastAPI settings; environment is set in Compose.
+
+### Sample Data (optional)
+- Seed sample accounts and discovery scans into Postgres:
+  - `docker compose run --rm backend python -m app.seed.sample_data`
+- After seeding, reload:
+  - Accounts list: `GET /api/accounts` (or UI: `/tenant/discovery/connect/list`)
+  - Discovery history: UI `/tenant/discovery/history` (or API: `GET /api/tenant/discovery/history`)
+
+### pgAdmin connection
+- Open http://localhost:5050 and sign in with the credentials from `docker-compose.yml`.
+- Add Server → name: `Local Postgres` → Connection tab:
+  - Host: `postgres`
+  - Port: `5432`
+  - Username: `ascintra`
+  - Password: `ascintra`
+- Save to browse schemas, tables, and run queries.
 
 ## Accounts API
 - Test connection (stubbed success): `POST /api/accounts/test-connection` with `{ provider: 'aws'|'gcp', account_identifier, aws_role_arn? }` → `{ ok: true }`.

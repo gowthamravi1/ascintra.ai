@@ -17,10 +17,12 @@ app.add_middleware(
 from app.routes_generated import router as generated_router
 from app.controllers.inventory import router as inventory_router
 from app.controllers.accounts import router as accounts_router
+from app.controllers.discovery import router as discovery_router
 
 # Include more specific routers first to avoid accidental overrides
 app.include_router(inventory_router)
 app.include_router(accounts_router)
+app.include_router(discovery_router)
 app.include_router(generated_router)
 
 

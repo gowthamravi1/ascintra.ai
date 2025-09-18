@@ -9,6 +9,9 @@ from sqlalchemy import (
     JSON,
     CheckConstraint,
     UniqueConstraint,
+    Integer,
+    Float,
+    ForeignKey,
 )
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.dialects.postgresql import UUID
@@ -34,6 +37,9 @@ class CloudAccount(Base):
     credentials_json = Column(JSON)
     discovery_enabled = Column(Boolean, nullable=False, server_default=text("true"))
     discovery_options = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+    # discovery schedule
+    discovery_frequency = Column(String)  # e.g., '6h', '12h', 'daily', 'weekly'
+    preferred_time_utc = Column(String)   # e.g., '02:00'
     connection_status = Column(String, nullable=False, server_default=text("'unknown'"))
     connection_last_tested_at = Column(DateTime(timezone=True))
 
@@ -45,3 +51,27 @@ class CloudAccount(Base):
         UniqueConstraint("provider", "account_identifier", name="uq_cloud_accounts_provider_identifier"),
     )
 
+
+class DiscoveryScan(Base):
+    __tablename__ = "discovery_scans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    scan_id = Column(String, nullable=False, unique=True)  # e.g., scan-001
+    account_id = Column(UUID(as_uuid=True), ForeignKey("cloud_accounts.id", ondelete="CASCADE"), nullable=False)
+
+    type = Column(String, nullable=False)  # full | incremental | compliance | backup-validation
+    status = Column(String, nullable=False)  # completed | running | failed | cancelled
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True))
+    duration_seconds = Column(Integer)
+    resources_scanned = Column(Integer)
+    resources_with_backups = Column(Integer)
+    findings = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+    recovery_score = Column(Integer)
+    backup_coverage = Column(Float)
+    triggered_by = Column(String)
+    region = Column(String)
+    progress = Column(Integer)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))

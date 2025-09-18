@@ -5,6 +5,7 @@ from app.models.account import (
     TestConnectionRequest,
     TestConnectionResponse,
 )
+from app.models.account_detail import AccountDetail
 from app.services.account_service import AccountService
 
 
@@ -28,3 +29,8 @@ def list_accounts():
     svc = AccountService()
     return svc.list()
 
+
+@router.get("/{account_id}", response_model=AccountDetail)
+def get_account(account_id: str):
+    svc = AccountService()
+    return svc.get(account_id)

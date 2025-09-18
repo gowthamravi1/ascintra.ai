@@ -30,6 +30,8 @@ export default function ConnectAWSAccount() {
   const [accountName, setAccountName] = useState("")
   const [primaryRegion, setPrimaryRegion] = useState("")
   const [roleArn, setRoleArn] = useState("")
+  const [discFreq, setDiscFreq] = useState("Every 6 hours")
+  const [prefTime, setPrefTime] = useState("02:00")
 
   const handleConnect = async () => {
     setIsConnecting(true)
@@ -479,7 +481,11 @@ export default function ConnectAWSAccount() {
                 <div className="space-y-3">
                   <div>
                     <label className="text-sm font-medium text-gray-700 block mb-2">Discovery Frequency</label>
-                    <select className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm">
+                    <select
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                      value={discFreq}
+                      onChange={(e) => setDiscFreq(e.target.value)}
+                    >
                       <option>Every 6 hours</option>
                       <option>Every 12 hours</option>
                       <option>Daily</option>
@@ -491,7 +497,8 @@ export default function ConnectAWSAccount() {
                     <label className="text-sm font-medium text-gray-700 block mb-2">Preferred Time (UTC)</label>
                     <input
                       type="time"
-                      defaultValue="02:00"
+                      value={prefTime}
+                      onChange={(e) => setPrefTime(e.target.value)}
                       className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                     />
                   </div>
@@ -529,6 +536,8 @@ export default function ConnectAWSAccount() {
                         name: accountName,
                         primary_region: primaryRegion,
                         aws_role_arn: roleArn,
+                        discovery_frequency: discFreq,
+                        preferred_time_utc: prefTime,
                         discovery_enabled: true,
                         discovery_options: { ec2: true, rds: true, s3: true, ebs: true },
                       }),
