@@ -347,7 +347,7 @@ class InventoryService:
         finally:
             session.close()
 
-    def list(self) -> InventoryListResponse:
+    def list_from_arango(self) -> InventoryListResponse:
         """Return inventory list using Arango if configured.
 
         If the 'fix' collection exists, executes the pre-aggregation AQL the user provided
