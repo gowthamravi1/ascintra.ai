@@ -108,7 +108,7 @@ export default function RecoveryTrendsPage() {
             <div className="text-2xl font-bold">87</div>
             <div className="flex items-center gap-1 text-sm">
               <TrendingUp className="h-3 w-3 text-success" />
-              <span className="text-success">+9 points (6 months)</span>
+              <span className="text-success">+0 points (6 months)</span>
             </div>
           </CardContent>
         </Card>
@@ -541,7 +541,7 @@ export default function RecoveryTrendsPage() {
             <CardContent>
               <div className="space-y-4">
                 {complianceEvolution.map((framework) => {
-                  const improvement = framework.jun - framework.jan
+                  const improvement = 0
                   return (
                     <div key={framework.framework} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-3">

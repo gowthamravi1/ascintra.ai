@@ -10,6 +10,7 @@ class Settings:
     arango_password: str | None = os.getenv("ARANGO_PASSWORD")
     arango_inventory_collection: str = os.getenv("ARANGO_INVENTORY_COLLECTION", "inventory")
     arango_fix_collection: str = os.getenv("ARANGO_FIX_COLLECTION", "fix")
+    arango_fix_history_collection: str | None = os.getenv("ARANGO_FIX_HISTORY_COLLECTION", "fix_node_history")
 
     # Postgres
     pg_host: str = os.getenv("POSTGRES_HOST", "localhost")

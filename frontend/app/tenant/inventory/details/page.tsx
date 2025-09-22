@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,22 +9,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { AlertTriangle, Info, ExternalLink, Copy, Shield, Settings, Tag, Clock, MapPin } from "lucide-react"
 
-const resourceData = {
-  id: "i-0123456789abcdef0",
-  name: "web-server-prod-01",
-  type: "EC2 Instance",
-  service: "EC2",
-  region: "us-east-1",
-  account: "prod-account-123",
-  status: "running",
-  created: "2024-01-10T14:30:00Z",
-  lastModified: "2024-01-15T09:45:00Z",
-  tags: [
-    { key: "Environment", value: "production" },
-    { key: "Team", value: "web-platform" },
-    { key: "Application", value: "frontend" },
-    { key: "CostCenter", value: "engineering" },
-  ],
+type ResourceData = {
+  id: string
+  name: string
+  type: string
+  service: string
+  region?: string
+  account?: string
+  status?: string
+  created?: string
+  lastModified?: string
+  last_backup?: string | null
+  tags?: Record<string, string>
 }
 
 const securityFindings = [
@@ -62,23 +59,42 @@ const securityFindings = [
   },
 ]
 
-const configurationData = {
-  instanceType: "t3.medium",
-  ami: "ami-0abcdef1234567890",
-  keyPair: "web-server-key",
-  vpc: "vpc-0123456789abcdef0",
-  subnet: "subnet-0123456789abcdef0",
-  securityGroups: ["sg-0123456789abcdef0", "sg-0987654321fedcba0"],
-  iamRole: "EC2-WebServer-Role",
-  monitoring: "enabled",
-  detailedMonitoring: "disabled",
-  ebsOptimized: true,
-  publicIp: "54.123.45.67",
-  privateIp: "10.0.1.100",
-}
+// Configuration details are loaded dynamically from backend
 
 export default function ResourceDetailsPage() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [resourceData, setResourceData] = useState<ResourceData | null>(null)
+  const [configuration, setConfiguration] = useState<Record<string, any>>({})
+  const [metadata, setMetadata] = useState<Record<string, any>>({})
+  const params = useSearchParams()
+
+  useEffect(() => {
+    const id = params.get("id")
+    if (!id) return
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/tenant/inventory/details/${encodeURIComponent(id)}`, { cache: "no-store" })
+        const data = await res.json()
+        if (data?.ok && data?.item) {
+          const it = data.item
+          setResourceData({
+            id: it.id,
+            name: it.name,
+            type: it.type,
+            service: it.service,
+            region: it.region,
+            account: it.account_id,
+            status: it.status,
+            last_backup: it.last_backup,
+            tags: it.metadata?.tags || it.tags || {},
+          })
+          setConfiguration(it.configuration || {})
+          setMetadata(it.metadata || {})
+        }
+      } catch {}
+    }
+    load()
+  }, [params])
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
@@ -112,6 +128,10 @@ export default function ResourceDetailsPage() {
     navigator.clipboard.writeText(text)
   }
 
+  if (!resourceData) {
+    return <div className="p-6">Loading...</div>
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -119,7 +139,7 @@ export default function ResourceDetailsPage() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl font-bold text-foreground">{resourceData.name}</h1>
-            <Badge variant="success">{resourceData.status}</Badge>
+            <Badge variant="success">{resourceData.status || ""}</Badge>
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
@@ -128,11 +148,11 @@ export default function ResourceDetailsPage() {
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="h-4 w-4" />
-              <span>{resourceData.region}</span>
+              <span>{resourceData.region || ""}</span>
             </div>
             <div className="flex items-center gap-1">
               <Clock className="h-4 w-4" />
-              <span>Created {new Date(resourceData.created).toLocaleDateString()}</span>
+              {resourceData.last_backup && <span>Last backup {new Date(resourceData.last_backup).toLocaleString()}</span>}
             </div>
           </div>
         </div>
@@ -159,7 +179,7 @@ export default function ResourceDetailsPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Account</p>
-                <p className="font-mono text-sm">{resourceData.account}</p>
+                <p className="font-mono text-sm">{resourceData.account || ""}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Service</p>
@@ -331,19 +351,19 @@ export default function ResourceDetailsPage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Instance Type:</span>
-                        <span className="font-mono">{configurationData.instanceType}</span>
+                        <span className="font-mono">{String(configuration.instanceType ?? '')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">AMI ID:</span>
-                        <span className="font-mono">{configurationData.ami}</span>
+                        <span className="font-mono">{String(configuration.ami ?? '')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Key Pair:</span>
-                        <span className="font-mono">{configurationData.keyPair}</span>
+                        <span className="font-mono">{String(configuration.keyPair ?? '')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">IAM Role:</span>
-                        <span className="font-mono">{configurationData.iamRole}</span>
+                        <span className="font-mono">{String(configuration.iamRole ?? '')}</span>
                       </div>
                     </div>
                   </div>
@@ -355,65 +375,57 @@ export default function ResourceDetailsPage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">VPC:</span>
-                        <span className="font-mono">{configurationData.vpc}</span>
+                        <span className="font-mono">{String(configuration.vpc ?? '')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Subnet:</span>
-                        <span className="font-mono">{configurationData.subnet}</span>
+                        <span className="font-mono">{String(configuration.subnet ?? '')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Public IP:</span>
-                        <span className="font-mono">{configurationData.publicIp}</span>
+                        <span className="font-mono">{String(configuration.publicIp ?? '')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Private IP:</span>
-                        <span className="font-mono">{configurationData.privateIp}</span>
+                        <span className="font-mono">{String(configuration.privateIp ?? '')}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Security Groups</h4>
-                    <div className="space-y-2">
-                      {configurationData.securityGroups.map((sg) => (
-                        <div key={sg} className="flex items-center justify-between p-2 border rounded">
-                          <span className="font-mono text-sm">{sg}</span>
-                          <Button variant="outline" size="sm" className="bg-transparent">
-                            <ExternalLink className="h-3 w-3" />
-                          </Button>
+                    <div className="space-y-4">
+                      {Array.isArray(configuration?.securityGroups) && configuration.securityGroups.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-2">Security Groups</h4>
+                          <div className="space-y-2">
+                            {configuration.securityGroups.map((sg: any) => (
+                              <div key={String(sg)} className="flex items-center justify-between p-2 border rounded">
+                                <span className="font-mono text-sm">{String(sg)}</span>
+                                <Button variant="outline" size="sm" className="bg-transparent">
+                                  <ExternalLink className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      )}
 
-                  <Separator />
+                      <Separator />
 
-                  <div>
-                    <h4 className="font-medium mb-2">Monitoring & Features</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Monitoring:</span>
-                        <Badge variant={configurationData.monitoring === "enabled" ? "success" : "secondary"}>
-                          {configurationData.monitoring}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Detailed Monitoring:</span>
-                        <Badge variant={configurationData.detailedMonitoring === "enabled" ? "success" : "secondary"}>
-                          {configurationData.detailedMonitoring}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">EBS Optimized:</span>
-                        <Badge variant={configurationData.ebsOptimized ? "success" : "secondary"}>
-                          {configurationData.ebsOptimized ? "enabled" : "disabled"}
-                        </Badge>
+                      <div>
+                        <h4 className="font-medium mb-2">Configuration</h4>
+                        <div className="space-y-2 text-sm">
+                          {Object.entries(configuration).filter(([k]) => k !== 'securityGroups').map(([key, val]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-muted-foreground">{key}:</span>
+                              <span className="font-mono">
+                                {typeof val === 'boolean' ? (val ? 'enabled' : 'disabled') : String(val ?? '')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -433,16 +445,16 @@ export default function ResourceDetailsPage() {
                     Resource Tags
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {resourceData.tags.map((tag) => (
-                      <div key={tag.key} className="flex items-center justify-between p-3 border rounded-lg">
+                    {Object.entries((resourceData.tags || {}) as Record<string, string>).map(([key, value]) => (
+                      <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
-                          <div className="font-medium text-sm">{tag.key}</div>
-                          <div className="text-sm text-muted-foreground">{tag.value}</div>
+                          <div className="font-medium text-sm">{key}</div>
+                          <div className="text-sm text-muted-foreground">{value}</div>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => copyToClipboard(`${tag.key}=${tag.value}`)}
+                          onClick={() => copyToClipboard(`${key}=${value}`)}
                           className="gap-2 bg-transparent"
                         >
                           <Copy className="h-3 w-3" />
@@ -459,11 +471,11 @@ export default function ResourceDetailsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-3 border rounded-lg">
                       <div className="text-sm text-muted-foreground">Created</div>
-                      <div className="font-medium">{new Date(resourceData.created).toLocaleString()}</div>
+                      <div className="font-medium">{metadata.created ? new Date(metadata.created).toLocaleString() : ''}</div>
                     </div>
                     <div className="p-3 border rounded-lg">
                       <div className="text-sm text-muted-foreground">Last Modified</div>
-                      <div className="font-medium">{new Date(resourceData.lastModified).toLocaleString()}</div>
+                      <div className="font-medium">{resourceData.last_backup ? new Date(resourceData.last_backup).toLocaleString() : ''}</div>
                     </div>
                   </div>
                 </div>

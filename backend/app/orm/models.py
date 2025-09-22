@@ -75,3 +75,28 @@ class DiscoveryScan(Base):
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class AssetsInventory(Base):
+    __tablename__ = "assets_inventory"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    account_id = Column(UUID(as_uuid=True), ForeignKey("cloud_accounts.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String, nullable=False)
+    service = Column(String, nullable=False)
+    kind = Column(String, nullable=False)
+    resource_id = Column(String, nullable=False)
+    name = Column(String)
+    type = Column(String)
+    status = Column(String)  # protected | unprotected | partial
+    region = Column(String)
+    last_backup = Column(DateTime(timezone=True))
+    arango_id = Column(String)  # e.g., collection/_key for cross-ref
+    tags = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "service", "kind", "resource_id", name="uq_assets_inventory_asset"),
+    )

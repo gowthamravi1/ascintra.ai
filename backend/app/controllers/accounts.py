@@ -15,7 +15,21 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 @router.post("/test-connection", response_model=TestConnectionResponse)
 def test_connection(payload: TestConnectionRequest):
     # For now, always succeed. Echo minimal details.
-    return TestConnectionResponse(ok=True, details={"provider": payload.provider, "account": payload.account_identifier})
+    details = {"provider": payload.provider, "account": payload.account_identifier}
+    # If AWS credentials are provided, persist them into Arango configs/fix.worker
+    if payload.provider == "aws" and payload.aws_access_key_id and payload.aws_secret_access_key:
+        try:
+            from app.services.config_service import ConfigService
+
+            ok = ConfigService().update_fix_worker_aws_credentials(
+                access_key_id=payload.aws_access_key_id,
+                secret_access_key=payload.aws_secret_access_key,
+                account=payload.account_identifier,
+            )
+            details["config_updated"] = bool(ok)
+        except Exception:
+            details["config_updated"] = False
+    return TestConnectionResponse(ok=True, details=details)
 
 
 @router.post("", response_model=Account)

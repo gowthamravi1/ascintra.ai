@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -45,8 +45,8 @@ import {
   Pause,
 } from "lucide-react"
 
-// Mock data for drift analysis
-const driftSummary = {
+// Mock defaults; will be replaced by API values
+const driftSummaryDefault = {
   totalResources: 1247,
   driftingResources: 23,
   criticalDrift: 8,
@@ -56,7 +56,7 @@ const driftSummary = {
   nextScan: "2024-01-19T14:30:00Z",
 }
 
-const driftData = [
+const driftDataDefault = [
   {
     id: "drift-001",
     resourceId: "i-0abc123def456789",
@@ -179,6 +179,21 @@ export default function DriftOverviewPage() {
   const [notificationEmail, setNotificationEmail] = useState("")
   const [scheduleNotes, setScheduleNotes] = useState("")
   const [selectedRecommendations, setSelectedRecommendations] = useState<string[]>([])
+  const [summary, setSummary] = useState(driftSummaryDefault)
+  const [rows, setRows] = useState(driftDataDefault)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/tenant/drift/overview", { cache: "no-store" })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data?.summary) setSummary(data.summary)
+        if (Array.isArray(data?.items)) setRows(data.items)
+      } catch {}
+    }
+    load()
+  }, [])
 
   const handleSelectResource = (resourceId: string) => {
     setSelectedResources((prev) =>
@@ -187,7 +202,7 @@ export default function DriftOverviewPage() {
   }
 
   const handleSelectAllCritical = () => {
-    const criticalResources = driftData.filter((item) => item.severity === "High").map((item) => item.id)
+    const criticalResources = rows.filter((item) => item.severity === "High").map((item) => item.id)
     setSelectedResources(criticalResources)
   }
 
@@ -271,7 +286,7 @@ export default function DriftOverviewPage() {
             <DialogTrigger asChild>
               <Button variant="destructive" disabled={selectedResources.length === 0}>
                 <Wrench className="h-4 w-4 mr-2" />
-                Fix All Critical ({driftData.filter((d) => d.severity === "High").length})
+                Fix All Critical ({rows.filter((d) => d.severity === "High").length})
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
@@ -292,7 +307,7 @@ export default function DriftOverviewPage() {
                 </div>
 
                 <div className="max-h-60 overflow-y-auto space-y-2">
-                  {driftData
+                  {rows
                     .filter((item) => item.severity === "High")
                     .map((item) => (
                       <div key={item.id} className="flex items-center space-x-2 p-2 border rounded">
@@ -448,7 +463,7 @@ export default function DriftOverviewPage() {
             <Shield className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{driftSummary.totalResources.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{summary.totalResources.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Monitored resources</p>
           </CardContent>
         </Card>
@@ -459,9 +474,9 @@ export default function DriftOverviewPage() {
             <AlertTriangle className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{driftSummary.driftingResources}</div>
+            <div className="text-2xl font-bold text-orange-600">{summary.driftingResources}</div>
             <p className="text-xs text-muted-foreground">
-              {((driftSummary.driftingResources / driftSummary.totalResources) * 100).toFixed(1)}% of total
+              {((summary.driftingResources / Math.max(summary.totalResources, 1)) * 100).toFixed(1)}% of total
             </p>
           </CardContent>
         </Card>
@@ -472,7 +487,7 @@ export default function DriftOverviewPage() {
             <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{driftSummary.criticalDrift}</div>
+            <div className="text-2xl font-bold text-red-600">{summary.criticalDrift}</div>
             <p className="text-xs text-muted-foreground">Require immediate attention</p>
           </CardContent>
         </Card>
@@ -484,17 +499,17 @@ export default function DriftOverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {new Date(driftSummary.lastScan).toLocaleTimeString([], {
+              {new Date(summary.lastScan).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
               })}
             </div>
             <p className="text-xs text-muted-foreground">
               Next scan at{" "}
-              {new Date(driftSummary.nextScan).toLocaleTimeString([], {
+              {summary.nextScan ? new Date(summary.nextScan).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
-              })}
+              }) : ""}
             </p>
           </CardContent>
         </Card>
@@ -520,7 +535,7 @@ export default function DriftOverviewPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {driftData.map((item) => (
+              {rows.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div>

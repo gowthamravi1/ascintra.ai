@@ -13,6 +13,7 @@ class InventoryItem(BaseModel):
     service: Optional[str] = None
     last_backup: Optional[str] = None
     tags: Dict[str, str] = {}
+    account_id: Optional[str] = None
 
 
 class InventorySummary(BaseModel):

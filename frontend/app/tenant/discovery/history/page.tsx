@@ -111,6 +111,8 @@ export default function DiscoveryHistory() {
   const [selectedScan, setSelectedScan] = useState<Scan | null>(null)
   const [scans, setScans] = useState<Scan[]>([])
   const [metrics, setMetrics] = useState({ total: 0, successRate: 0, avgDuration: 0, resources: 0 })
+  const [newScanOpen, setNewScanOpen] = useState(false)
+  const [newScanAccountId, setNewScanAccountId] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -166,6 +168,9 @@ export default function DiscoveryHistory() {
   })
 
   const uniqueAccounts = Array.from(new Set(scans.map((scan) => scan.accountName)))
+  const accountOptions = Array.from(
+    new Map(scans.map((s) => [s.accountId, { id: s.accountId, name: s.accountName }])).values()
+  )
   const avgMinutes = metrics.avgDuration / 60
   const successRate = metrics.successRate
   const totalResourcesScanned = metrics.resources
@@ -181,9 +186,50 @@ export default function DiscoveryHistory() {
           <Button variant="outline" size="sm" onClick={() => location.reload()}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
-          <Button size="sm">
-            <Play className="h-4 w-4 mr-2" /> New Scan
-          </Button>
+          <Dialog open={newScanOpen} onOpenChange={setNewScanOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Play className="h-4 w-4 mr-2" /> New Scan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Start New Scan</DialogTitle>
+                <DialogDescription>Select an account to scan now</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">Account</label>
+                  <Select value={newScanAccountId ?? undefined} onValueChange={(v) => setNewScanAccountId(v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accountOptions.map((opt) => (
+                        <SelectItem key={opt.id} value={opt.id}>{opt.name || opt.id}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setNewScanOpen(false)}>Cancel</Button>
+                  <Button
+                    onClick={async () => {
+                      if (!newScanAccountId) return
+                      try {
+                        await fetch(`/api/tenant/discovery/history/scan/${newScanAccountId}`, { method: 'POST' })
+                        setNewScanOpen(false)
+                        location.reload()
+                      } catch {}
+                    }}
+                    disabled={!newScanAccountId}
+                  >
+                    Start Scan
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -439,4 +485,3 @@ export default function DiscoveryHistory() {
     </div>
   )
 }
-

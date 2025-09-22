@@ -15,6 +15,8 @@ import {
   ArrowRight,
   RefreshCw,
 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 
 export default function ConnectAWSAccount() {
+  const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "connecting" | "success" | "error">("idle")
@@ -30,6 +33,8 @@ export default function ConnectAWSAccount() {
   const [accountName, setAccountName] = useState("")
   const [primaryRegion, setPrimaryRegion] = useState("")
   const [roleArn, setRoleArn] = useState("")
+  const [awsAccessKeyId, setAwsAccessKeyId] = useState("")
+  const [awsSecretAccessKey, setAwsSecretAccessKey] = useState("")
   const [discFreq, setDiscFreq] = useState("Every 6 hours")
   const [prefTime, setPrefTime] = useState("02:00")
 
@@ -40,7 +45,13 @@ export default function ConnectAWSAccount() {
       const res = await fetch("/api/accounts/test-connection", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider: "aws", account_identifier: accountId, aws_role_arn: roleArn }),
+        body: JSON.stringify({
+          provider: "aws",
+          account_identifier: accountId,
+          aws_role_arn: roleArn,
+          aws_access_key_id: awsAccessKeyId || undefined,
+          aws_secret_access_key: awsSecretAccessKey || undefined,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data?.ok) {
@@ -351,15 +362,37 @@ export default function ConnectAWSAccount() {
       )}
 
       {currentStep === 3 && (
-        <Card className="bg-white/80 backdrop-blur-sm border-white/20 shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 text-purple-600" />
-              Connection Test
-            </CardTitle>
-            <CardDescription>Verify that RecoveryVault can successfully connect to your AWS account</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+      <Card className="bg-white/80 backdrop-blur-sm border-white/20 shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5 text-purple-600" />
+            Connection Test
+          </CardTitle>
+          <CardDescription>Verify that RecoveryVault can successfully connect to your AWS account</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 block">AWS Access Key ID</label>
+              <Input
+                placeholder="AKIA..."
+                className="bg-white/50"
+                value={awsAccessKeyId}
+                onChange={(e) => setAwsAccessKeyId(e.target.value)}
+              />
+              <p className="text-xs text-gray-500">Optional: used to update Arango configs for discovery</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 block">AWS Secret Access Key</label>
+              <Input
+                type="password"
+                placeholder="********"
+                className="bg-white/50"
+                value={awsSecretAccessKey}
+                onChange={(e) => setAwsSecretAccessKey(e.target.value)}
+              />
+            </div>
+          </div>
             {connectionStatus === "idle" && (
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
@@ -527,7 +560,7 @@ export default function ConnectAWSAccount() {
                 className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                 onClick={async () => {
                   try {
-                    await fetch("/api/accounts", {
+                    const res = await fetch("/api/accounts", {
                       method: "POST",
                       headers: { "content-type": "application/json" },
                       body: JSON.stringify({
@@ -536,14 +569,22 @@ export default function ConnectAWSAccount() {
                         name: accountName,
                         primary_region: primaryRegion,
                         aws_role_arn: roleArn,
+                        aws_access_key_id: awsAccessKeyId || undefined,
+                        aws_secret_access_key: awsSecretAccessKey || undefined,
                         discovery_frequency: discFreq,
                         preferred_time_utc: prefTime,
                         discovery_enabled: true,
                         discovery_options: { ec2: true, rds: true, s3: true, ebs: true },
                       }),
                     })
+                    if (res.ok) {
+                      toast.success("Account connected")
+                      setTimeout(() => router.push("/tenant/discovery/history"), 600)
+                    } else {
+                      toast.error("Failed to connect account")
+                    }
                   } catch (e) {
-                    // ignore for now
+                    toast.error("Failed to connect account")
                   }
                 }}
               >

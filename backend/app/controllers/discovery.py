@@ -122,3 +122,11 @@ def get_scan(scan_id: str) -> ScanDetailResponse:
     from app.services.discovery_service import DiscoveryService
 
     return DiscoveryService().get(scan_id)
+
+
+@router.post("/scan/{account_identifier}", response_model=ScanDetailResponse)
+def trigger_scan(account_identifier: str) -> ScanDetailResponse:
+    """Trigger a discovery scan for a given account identifier and return the scan details."""
+    from app.services.discovery_service import DiscoveryService
+
+    return DiscoveryService().run_scan_for_account_by_identifier(account_identifier, triggered_by="manual")

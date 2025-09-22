@@ -49,7 +49,7 @@ const aiInsights = [
   {
     type: "success",
     title: "Compliance Improvement",
-    description: "SOC 2 score increased by 8 points this month",
+    description: "SOC 2 score increased by 0 points this month",
     impact: "Low",
     action: "Maintain current practices",
     icon: CheckCircle,

@@ -18,6 +18,21 @@ class AccountService:
     def create(self, data: AccountCreate) -> Account:
         session: Session = get_session()
         try:
+            # Merge credentials JSON with provided AWS keys if present
+            creds = data.credentials_json or {}
+            if data.provider == "aws" and data.aws_access_key_id and data.aws_secret_access_key:
+                aws_creds = creds.get("aws", {})
+                aws_creds.update({
+                    "access_key_id": data.aws_access_key_id,
+                    "secret_access_key": data.aws_secret_access_key,
+                })
+                # Optionally include account and region context
+                if data.account_identifier:
+                    aws_creds.setdefault("account", data.account_identifier)
+                if data.primary_region:
+                    aws_creds.setdefault("region", data.primary_region)
+                creds["aws"] = aws_creds
+
             obj = CloudAccount(
                 provider=data.provider,
                 account_identifier=data.account_identifier,
@@ -27,7 +42,7 @@ class AccountService:
                 aws_external_id=data.aws_external_id,
                 gcp_project_number=data.gcp_project_number,
                 gcp_sa_email=data.gcp_sa_email,
-                credentials_json=data.credentials_json or {},
+                credentials_json=creds,
                 discovery_enabled=data.discovery_enabled,
                 discovery_options=data.discovery_options or {},
                 discovery_frequency=data.discovery_frequency,
@@ -38,6 +53,15 @@ class AccountService:
             session.add(obj)
             session.commit()
             session.refresh(obj)
+            # Kick off initial discovery scan and inventory materialization (best-effort)
+            try:
+                from app.services.discovery_service import DiscoveryService
+
+                DiscoveryService().run_scan_for_account_by_identifier(data.account_identifier, triggered_by="setup")
+            except Exception:
+                # Ignore failures here to not block account creation
+                pass
+
             return Account(
                 id=str(obj.id),
                 provider=obj.provider,

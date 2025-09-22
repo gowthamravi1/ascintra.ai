@@ -13,6 +13,8 @@ class AccountCreate(BaseModel):
     # AWS specific
     aws_role_arn: Optional[str] = None
     aws_external_id: Optional[str] = None
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
 
     # GCP specific
     gcp_project_number: Optional[str] = None
@@ -38,6 +40,8 @@ class TestConnectionRequest(BaseModel):
     provider: str = Field(pattern=r"^(aws|gcp)$")
     account_identifier: str
     aws_role_arn: Optional[str] = None
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
     gcp_sa_email: Optional[str] = None
     # For alignment with UI selections (not validated here)
     discovery_frequency: Optional[str] = None

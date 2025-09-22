@@ -40,127 +40,17 @@ import {
   Minus,
 } from "lucide-react"
 
-const coverageByService = [
-  { service: "EC2", total: 245, protected: 233, partial: 8, unprotected: 4, coverage: 95.1, trend: "up" },
-  { service: "RDS", total: 42, protected: 41, partial: 1, unprotected: 0, coverage: 97.6, trend: "up" },
-  { service: "EKS", total: 18, protected: 15, partial: 2, unprotected: 1, coverage: 83.3, trend: "down" },
-  { service: "DynamoDB", total: 28, protected: 28, partial: 0, unprotected: 0, coverage: 100, trend: "stable" },
-  { service: "EFS", total: 15, protected: 12, partial: 2, unprotected: 1, coverage: 80.0, trend: "up" },
-  { service: "S3", total: 156, protected: 156, partial: 0, unprotected: 0, coverage: 100, trend: "stable" },
-  { service: "Lambda", total: 89, protected: 67, partial: 15, unprotected: 7, coverage: 75.3, trend: "down" },
-  { service: "ELB", total: 23, protected: 21, partial: 1, unprotected: 1, coverage: 91.3, trend: "up" },
-]
+import { useEffect } from "react"
+import Link from "next/link"
 
-const resourceDetails = [
-  {
-    id: "i-0123456789abcdef0",
-    name: "web-server-prod-01",
-    type: "EC2 Instance",
-    service: "EC2",
-    region: "us-east-1",
-    status: "protected",
-    lastBackup: "2024-01-08 02:00:00",
-    nextBackup: "2024-01-09 02:00:00",
-    rto: "2h",
-    rpo: "1h",
-    policy: "Production-Daily",
-    retention: "30 days",
-    backupSize: "45.2 GB",
-    cost: "$12.50/month",
-    tags: ["production", "web-tier"],
-  },
-  {
-    id: "db-cluster-prod",
-    name: "main-database-cluster",
-    type: "RDS Cluster",
-    service: "RDS",
-    region: "us-east-1",
-    status: "protected",
-    lastBackup: "2024-01-08 01:30:00",
-    nextBackup: "2024-01-08 07:30:00",
-    rto: "30m",
-    rpo: "15m",
-    policy: "Critical-Hourly",
-    retention: "90 days",
-    backupSize: "234.8 GB",
-    cost: "$89.20/month",
-    tags: ["production", "database"],
-  },
-  {
-    id: "i-0987654321fedcba0",
-    name: "analytics-worker-02",
-    type: "EC2 Instance",
-    service: "EC2",
-    region: "us-west-2",
-    status: "unprotected",
-    lastBackup: "Never",
-    nextBackup: "N/A",
-    rto: "N/A",
-    rpo: "N/A",
-    policy: "None",
-    retention: "N/A",
-    backupSize: "N/A",
-    cost: "$0.00/month",
-    tags: ["development", "analytics"],
-  },
-  {
-    id: "eks-cluster-staging",
-    name: "staging-kubernetes",
-    type: "EKS Cluster",
-    service: "EKS",
-    region: "eu-west-1",
-    status: "partial",
-    lastBackup: "2024-01-07 18:00:00",
-    nextBackup: "2024-01-14 18:00:00",
-    rto: "4h",
-    rpo: "2h",
-    policy: "Staging-Weekly",
-    retention: "14 days",
-    backupSize: "156.7 GB",
-    cost: "$23.40/month",
-    tags: ["staging", "kubernetes"],
-  },
-  {
-    id: "ddb-table-users",
-    name: "user-profiles-table",
-    type: "DynamoDB Table",
-    service: "DynamoDB",
-    region: "us-east-1",
-    status: "protected",
-    lastBackup: "2024-01-08 03:00:00",
-    nextBackup: "Continuous",
-    rto: "15m",
-    rpo: "5m",
-    policy: "Critical-Continuous",
-    retention: "35 days",
-    backupSize: "89.3 GB",
-    cost: "$45.60/month",
-    tags: ["production", "user-data"],
-  },
-  {
-    id: "efs-shared-01",
-    name: "shared-file-system",
-    type: "EFS File System",
-    service: "EFS",
-    region: "us-east-1",
-    status: "protected",
-    lastBackup: "2024-01-08 00:30:00",
-    nextBackup: "2024-01-09 00:30:00",
-    rto: "3h",
-    rpo: "1h",
-    policy: "Standard-Daily",
-    retention: "60 days",
-    backupSize: "67.8 GB",
-    cost: "$18.90/month",
-    tags: ["production", "shared-storage"],
-  },
-]
+type CoverageService = { service: string; total: number; protected: number; partial: number; unprotected: number; coverage: number; trend?: string }
+type CoverageItem = { id: string; name: string; type: string; service: string; region: string; status: string; last_backup?: string | null }
 
-const coverageDistribution = [
-  { name: "Protected", value: 85.2, color: "#10b981", count: 1121 },
-  { name: "Partial", value: 8.3, color: "#f59e0b", count: 109 },
-  { name: "Unprotected", value: 6.5, color: "#ef4444", count: 86 },
-]
+const distColors = {
+  Protected: "#10b981",
+  Partial: "#f59e0b",
+  Unprotected: "#ef4444",
+} as const
 
 const backupTrends = [
   { month: "Jul", protected: 78.2, partial: 12.1, unprotected: 9.7 },
@@ -176,8 +66,25 @@ export default function BackupCoveragePage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [serviceFilter, setServiceFilter] = useState("all")
   const [activeTab, setActiveTab] = useState("overview")
+  const [services, setServices] = useState<CoverageService[]>([])
+  const [items, setItems] = useState<CoverageItem[]>([])
+  const [summary, setSummary] = useState({ total: 0, protected: 0, partial: 0, unprotected: 0, coverage: 0 })
 
-  const filteredResources = resourceDetails.filter((resource) => {
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/tenant/inventory/coverage", { cache: "no-store" })
+        if (!res.ok) return
+        const data = await res.json()
+        setServices(Array.isArray(data?.by_service) ? data.by_service : [])
+        setItems(Array.isArray(data?.items) ? data.items : [])
+        setSummary(data?.summary || { total: 0, protected: 0, partial: 0, unprotected: 0, coverage: 0 })
+      } catch {}
+    }
+    load()
+  }, [])
+
+  const filteredResources = items.filter((resource) => {
     const matchesSearch =
       resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resource.type.toLowerCase().includes(searchTerm.toLowerCase())
@@ -198,6 +105,18 @@ export default function BackupCoveragePage() {
         return <Shield className="h-4 w-4 text-gray-400" />
     }
   }
+
+  const coverageDistribution = (() => {
+    const total = summary.total || 1
+    const prot = summary.protected
+    const partial = summary.partial
+    const unprot = summary.unprotected
+    return [
+      { name: "Protected", value: Math.round((prot / total) * 1000) / 10, color: distColors.Protected, count: prot },
+      { name: "Partial", value: Math.round((partial / total) * 1000) / 10, color: distColors.Partial, count: partial },
+      { name: "Unprotected", value: Math.round((unprot / total) * 1000) / 10, color: distColors.Unprotected, count: unprot },
+    ]
+  })()
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -282,9 +201,9 @@ export default function BackupCoveragePage() {
             <Shield className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">85.2%</div>
-            <Progress value={85.2} className="mt-2" />
-            <p className="text-xs text-muted-foreground mt-2">1,121 of 1,316 resources protected</p>
+            <div className="text-2xl font-bold">{summary.coverage}%</div>
+            <Progress value={summary.coverage} className="mt-2" />
+            <p className="text-xs text-muted-foreground mt-2">{summary.protected.toLocaleString()} of {summary.total.toLocaleString()} resources protected</p>
           </CardContent>
         </Card>
 
@@ -294,7 +213,7 @@ export default function BackupCoveragePage() {
             <ShieldCheck className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">1,121</div>
+            <div className="text-2xl font-bold text-green-600">{summary.protected.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Fully protected with backup policies</p>
           </CardContent>
         </Card>
@@ -305,7 +224,7 @@ export default function BackupCoveragePage() {
             <AlertTriangle className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">109</div>
+            <div className="text-2xl font-bold text-yellow-600">{summary.partial.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Resources with incomplete protection</p>
           </CardContent>
         </Card>
@@ -316,7 +235,7 @@ export default function BackupCoveragePage() {
             <ShieldX className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">86</div>
+            <div className="text-2xl font-bold text-red-600">{summary.unprotected.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Resources without backup protection</p>
           </CardContent>
         </Card>
@@ -383,7 +302,7 @@ export default function BackupCoveragePage() {
               <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={coverageByService}>
+                    <BarChart data={services}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="service" />
                       <YAxis domain={[0, 100]} />
@@ -407,8 +326,8 @@ export default function BackupCoveragePage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {resourceDetails
-                  .filter((r) => r.status === "unprotected" && r.tags.includes("production"))
+                {items
+                  .filter((r) => r.status === "unprotected")
                   .map((resource) => (
                     <div
                       key={resource.id}
@@ -417,7 +336,11 @@ export default function BackupCoveragePage() {
                       <div className="flex items-center gap-3">
                         {getServiceIcon(resource.service)}
                         <div>
-                          <div className="font-medium">{resource.name}</div>
+                          <div className="font-medium">
+                            <Link href={`/tenant/inventory/details?id=${encodeURIComponent(resource.id)}`} className="underline-offset-2 hover:underline">
+                              {resource.name}
+                            </Link>
+                          </div>
                           <div className="text-sm text-gray-600 dark:text-gray-400">
                             {resource.type} • {resource.region}
                           </div>
@@ -446,7 +369,7 @@ export default function BackupCoveragePage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {coverageByService.map((service) => (
+                {services.map((service) => (
                   <div key={service.service} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center gap-3">
                       {getServiceIcon(service.service)}
@@ -476,8 +399,8 @@ export default function BackupCoveragePage() {
                         </div>
                       </div>
                       <div className="w-32">
-                        <Progress value={service.coverage} className="h-2" />
-                        <div className="text-xs text-center mt-1">{service.coverage}%</div>
+                        <Progress value={service.coverage ?? 0} className="h-2" />
+                        <div className="text-xs text-center mt-1">{service.coverage ?? 0}%</div>
                       </div>
                     </div>
                   </div>
@@ -558,7 +481,11 @@ export default function BackupCoveragePage() {
                           <div className="flex items-center gap-2">
                             {getStatusIcon(resource.status)}
                             <div>
-                              <div className="font-medium">{resource.name}</div>
+                              <div className="font-medium">
+                                <Link href={`/tenant/inventory/details?id=${encodeURIComponent(resource.id)}`} className="underline-offset-2 hover:underline">
+                                  {resource.name}
+                                </Link>
+                              </div>
                               <div className="text-xs text-gray-500">{resource.type}</div>
                             </div>
                           </div>
@@ -574,13 +501,7 @@ export default function BackupCoveragePage() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3 text-gray-400" />
-                            <span className="text-sm">
-                              {resource.lastBackup === "Never" ? (
-                                <span className="text-red-500">Never</span>
-                              ) : (
-                                resource.lastBackup
-                              )}
-                            </span>
+                            <span className="text-sm">{resource.last_backup || ""}</span>
                           </div>
                         </TableCell>
                         <TableCell>

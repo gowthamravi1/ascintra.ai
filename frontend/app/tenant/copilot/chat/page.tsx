@@ -26,7 +26,7 @@ const quickSuggestions = [
 
 const mockResponses: Record<string, string> = {
   "recovery score":
-    "Your current recovery score is 87%, which is good but has room for improvement. The main factors affecting your score are: 1) 3 RDS instances without automated backups (-5 points), 2) EC2 instances in single AZ (-3 points), and 3) Missing disaster recovery testing (-2 points). I recommend starting with the RDS backups as they pose the highest risk.",
+    "Your current recovery score is 87%, which is good but has room for improvement. The main factors affecting your score are: 1) 3 RDS instances without automated backups (0 points), 2) EC2 instances in single AZ (0 points), and 3) Missing disaster recovery testing (0 points). I recommend starting with the RDS backups as they pose the highest risk.",
   "backup gaps":
     "I've identified several backup gaps in your infrastructure: 1) **Critical**: 3 RDS instances (prod-db-1, analytics-db, user-db) lack automated backups, 2) **Medium**: 12 EBS volumes without snapshots, 3) **Low**: S3 buckets missing cross-region replication. The RDS instances should be your top priority as they contain critical business data.",
   rto: "To optimize your RTO for critical systems, I recommend: 1) **Multi-AZ deployment** for RDS instances (reduces RTO from 4h to 30min), 2) **Auto Scaling Groups** with pre-warmed instances, 3) **Application Load Balancer** health checks for faster failover, 4) **Database read replicas** in different AZs. These changes could reduce your average RTO from 2.4h to 45 minutes.",

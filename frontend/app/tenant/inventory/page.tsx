@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Search, Filter, Download, MoreHorizontal, Eye, Shield, AlertTriangle } from "lucide-react"
+import Link from "next/link"
 
 interface Resource {
   id: string
@@ -32,91 +33,52 @@ interface ServiceStats {
   coverage: number
 }
 
-const fallbackResources: Resource[] = [
-  {
-    id: "i-1234567890abcdef0",
-    name: "web-server-prod-01",
-    type: "EC2 Instance",
-    service: "EC2",
-    region: "us-east-1",
-    status: "protected",
-    lastBackup: "2 hours ago",
-    rpo: "4h",
-    rto: "1h",
-    criticality: "high",
-  },
-  {
-    id: "vol-0987654321fedcba0",
-    name: "database-storage",
-    type: "EBS Volume",
-    service: "EBS",
-    region: "us-east-1",
-    status: "protected",
-    lastBackup: "1 hour ago",
-    rpo: "1h",
-    rto: "30m",
-    criticality: "high",
-  },
-  {
-    id: "i-abcdef1234567890",
-    name: "test-server-dev-01",
-    type: "EC2 Instance",
-    service: "EC2",
-    region: "us-west-2",
-    status: "unprotected",
-    rpo: "24h",
-    rto: "4h",
-    criticality: "low",
-  },
-  {
-    id: "db-cluster-prod",
-    name: "production-database",
-    type: "RDS Cluster",
-    service: "RDS",
-    region: "us-east-1",
-    status: "protected",
-    lastBackup: "30 minutes ago",
-    rpo: "15m",
-    rto: "15m",
-    criticality: "high",
-  },
-  {
-    id: "lambda-api-handler",
-    name: "api-gateway-handler",
-    type: "Lambda Function",
-    service: "Lambda",
-    region: "us-east-1",
-    status: "partial",
-    lastBackup: "6 hours ago",
-    rpo: "12h",
-    rto: "2h",
-    criticality: "medium",
-  },
-]
-
-const serviceStats: ServiceStats[] = [
-  { service: "EC2", total: 45, protected: 38, unprotected: 7, coverage: 84 },
-  { service: "RDS", total: 12, protected: 11, unprotected: 1, coverage: 92 },
-  { service: "EBS", total: 89, protected: 76, unprotected: 13, coverage: 85 },
-  { service: "Lambda", total: 23, protected: 15, unprotected: 8, coverage: 65 },
-  { service: "S3", total: 156, protected: 142, unprotected: 14, coverage: 91 },
-]
-
-const regionStats = [
-  { region: "us-east-1", total: 187, protected: 159, coverage: 85 },
-  { region: "us-west-2", total: 98, protected: 82, coverage: 84 },
-  { region: "eu-west-1", total: 67, protected: 61, coverage: 91 },
-  { region: "ap-southeast-1", total: 23, protected: 20, coverage: 87 },
-]
+type RegionStat = { region: string; total: number; protected: number; coverage: number }
 
 export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [serviceFilter, setServiceFilter] = useState("all")
   const [regionFilter, setRegionFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [resourcesData, setResourcesData] = useState<Resource[]>(fallbackResources)
+  const [resourcesData, setResourcesData] = useState<Resource[]>([])
   const [protectedCount, setProtectedCount] = useState(0)
   const [unprotectedCount, setUnprotectedCount] = useState(0)
+  
+  // Derived: service and region stats from resourcesData
+  const svcStats: ServiceStats[] = (() => {
+    const map = new Map<string, { total: number; prot: number }>()
+    for (const r of resourcesData) {
+      const key = r.service || "Unknown"
+      const prev = map.get(key) || { total: 0, prot: 0 }
+      prev.total += 1
+      if (r.status === "protected") prev.prot += 1
+      map.set(key, prev)
+    }
+    return Array.from(map.entries()).map(([service, v]) => ({
+      service,
+      total: v.total,
+      protected: v.prot,
+      unprotected: v.total - v.prot,
+      coverage: v.total ? Math.round((v.prot / v.total) * 100) : 0,
+    }))
+  })()
+
+  const regStats: RegionStat[] = (() => {
+    const map = new Map<string, { total: number; prot: number }>()
+    for (const r of resourcesData) {
+      const key = r.region || "unknown"
+      const prev = map.get(key) || { total: 0, prot: 0 }
+      prev.total += 1
+      if (r.status === "protected") prev.prot += 1
+      map.set(key, prev)
+    }
+    return Array.from(map.entries()).map(([region, v]) => ({
+      region,
+      total: v.total,
+      protected: v.prot,
+      coverage: v.total ? Math.round((v.prot / v.total) * 100) : 0,
+    }))
+  })()
 
   const toRelative = (val?: string | number | null): string | undefined => {
     if (val === undefined || val === null) return undefined
@@ -154,15 +116,13 @@ export default function InventoryPage() {
             criticality: status === "unprotected" ? "high" : "low",
           }
         })
-        if (mapped.length) {
-          setResourcesData(mapped)
-          const prot = mapped.filter((r) => r.status === "protected").length
-          const unprot = mapped.filter((r) => r.status === "unprotected").length
-          setProtectedCount(prot)
-          setUnprotectedCount(unprot)
-        }
+        setResourcesData(mapped)
+        const prot = mapped.filter((r) => r.status === "protected").length
+        const unprot = mapped.filter((r) => r.status === "unprotected").length
+        setProtectedCount(prot)
+        setUnprotectedCount(unprot)
       } catch (e) {
-        // ignore and keep fallback
+        // ignore; keep empty list
       }
     }
     load()
@@ -363,7 +323,11 @@ export default function InventoryPage() {
                     <TableRow key={resource.id}>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{resource.name}</div>
+                          <div className="font-medium">
+                            <Link href={`/tenant/inventory/details?id=${encodeURIComponent(resource.id)}`} className="underline-offset-2 hover:underline">
+                              {resource.name}
+                            </Link>
+                          </div>
                           <div className="text-sm text-muted-foreground">{resource.type}</div>
                           <div className="text-xs text-muted-foreground">{resource.id}</div>
                         </div>
@@ -431,7 +395,7 @@ export default function InventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {serviceStats.map((stat) => (
+                  {svcStats.map((stat) => (
                     <TableRow key={stat.service}>
                       <TableCell className="font-medium">{stat.service}</TableCell>
                       <TableCell>{stat.total}</TableCell>
@@ -466,7 +430,7 @@ export default function InventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {regionStats.map((stat) => (
+                  {regStats.map((stat) => (
                     <TableRow key={stat.region}>
                       <TableCell className="font-medium">{stat.region}</TableCell>
                       <TableCell>{stat.total}</TableCell>

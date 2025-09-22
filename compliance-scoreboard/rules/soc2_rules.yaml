@@ -1,0 +1,17 @@
+rules:
+  - id: soc2-s3-public
+    description: "S3 buckets must not be public"
+    type: aws_s3_bucket
+    field: public
+    expected: false
+    severity: high
+    category: Security
+
+  - id: soc2-iam-mfa
+    description: "All IAM users must have MFA enabled"
+    type: aws_iam_user
+    field: mfa_enabled
+    expected: true
+    severity: high
+    category: Security
+
