@@ -62,18 +62,25 @@ class OverviewService:
                 # Use actual compliance evaluation score
                 compliance_status = latest_evaluation.compliance_score
             else:
-                # No evaluations yet - show a realistic default based on rule configuration
-                total_rules = self.session.query(ComplianceRule).count()
-                enabled_rules = self.session.query(ComplianceRule).filter(ComplianceRule.enabled == True).count()
+                # No evaluations yet - check if there are resources to evaluate
+                total_resources = self.session.query(AssetsInventory).count()
                 
-                if total_rules == 0:
+                if total_resources == 0:
+                    # No resources to evaluate - show 0%
                     compliance_status = 0
-                elif enabled_rules == total_rules:
-                    # All rules enabled but no evaluation - show a moderate score
-                    compliance_status = 75.0
                 else:
-                    # Some rules disabled - show lower score
-                    compliance_status = (enabled_rules / total_rules * 60) + 20
+                    # Has resources but no evaluations - show a realistic default based on rule configuration
+                    total_rules = self.session.query(ComplianceRule).count()
+                    enabled_rules = self.session.query(ComplianceRule).filter(ComplianceRule.enabled == True).count()
+                    
+                    if total_rules == 0:
+                        compliance_status = 0
+                    elif enabled_rules == total_rules:
+                        # All rules enabled but no evaluation - show a moderate score
+                        compliance_status = 75.0
+                    else:
+                        # Some rules disabled - show lower score
+                        compliance_status = (enabled_rules / total_rules * 60) + 20
             
             # Get active compliance frameworks
             active_frameworks = self.session.query(ComplianceFramework).filter(

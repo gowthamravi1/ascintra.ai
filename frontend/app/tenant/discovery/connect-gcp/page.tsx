@@ -15,6 +15,7 @@ export default function ConnectGCPAccount() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "connecting" | "success" | "error">("idle")
   const [projectId, setProjectId] = useState("")
   const [projectNumber, setProjectNumber] = useState("")
@@ -68,6 +69,7 @@ export default function ConnectGCPAccount() {
   }
 
   const handleCreateAccount = async () => {
+    setIsCreatingAccount(true)
     try {
       const res = await fetch("/api/accounts", {
         method: "POST",
@@ -94,6 +96,8 @@ export default function ConnectGCPAccount() {
       }
     } catch (e) {
       toast.error("Failed to create account")
+    } finally {
+      setIsCreatingAccount(false)
     }
   }
 
@@ -287,7 +291,7 @@ export default function ConnectGCPAccount() {
                 disabled={!serviceAccountJson}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
               >
-                Test Connection
+                Next
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
@@ -543,11 +547,21 @@ export default function ConnectGCPAccount() {
               </Button>
               <Button
                 onClick={handleCreateAccount}
+                disabled={isCreatingAccount}
                 className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
               >
-                <Shield className="h-4 w-4 mr-2" />
-                Connect GCP Account
-                <CheckCircle className="h-4 w-4 ml-2" />
+                {isCreatingAccount ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting Account...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="h-4 w-4 mr-2" />
+                    Connect GCP Account
+                    <CheckCircle className="h-4 w-4 ml-2" />
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>

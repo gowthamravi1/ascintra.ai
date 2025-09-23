@@ -249,7 +249,12 @@ class InventoryService:
                 LET primaryKind = (
                   FIRST(FOR k IN kinds 
                     FILTER k != null AND (LIKE(k, 'aws_%', true) OR LIKE(k, 'gcp_%', true))
+                    FILTER k != 'aws_resource' AND k != 'gcp_resource'  /* Exclude generic resource types */
                     SORT LENGTH(k) DESC
+                    RETURN k
+                  ) ||
+                  FIRST(FOR k IN kinds 
+                    FILTER k != null AND (LIKE(k, 'aws_%', true) OR LIKE(k, 'gcp_%', true))
                     RETURN k
                   ) ||
                   FIRST(FOR k IN kinds FILTER k != null RETURN k)

@@ -226,6 +226,7 @@ class DiscoveryService:
                     triggered_by=triggered_by,
                     region="",
                     progress=None,
+                    scan_type="inventory",
                 )
 
             start = datetime.now(timezone.utc)

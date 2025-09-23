@@ -1,0 +1,94 @@
+version: "3.9"
+services:
+  # arango:
+  #   image: arangodb:3.11
+  #   container_name: ascintra-arango
+  #   environment:
+  #     - ARANGO_ROOT_PASSWORD=example
+  #   ports:
+  #     - "8529:8529"
+  #   volumes:
+  #     - arango-data:/var/lib/arangodb3
+  postgres:
+    image: postgres:15-alpine
+    container_name: ascintra-postgres
+    environment:
+      - POSTGRES_DB=ascintra
+      - POSTGRES_USER=ascintra
+      - POSTGRES_PASSWORD=ascintra
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ascintra -d ascintra"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: ascintra-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+
+  
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: ascintra-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/healthz\")' "]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    environment:
+      # Point to existing ArangoDB running on host (container: graphdb -> localhost:8529)
+      - ARANGO_URL=http://host.docker.internal:8529
+      - ARANGO_DB=fix
+      - ARANGO_USER=fix
+      - ARANGO_PASSWORD=changeme
+      - ARANGO_INVENTORY_COLLECTION=inventory
+      - ARANGO_FIX_COLLECTION=fix
+      # Postgres
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=ascintra
+      - POSTGRES_USER=ascintra
+      - POSTGRES_PASSWORD=ascintra
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    container_name: ascintra-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Frontend proxy route forwards to this
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  pgdata:
+  pgadmin-data:

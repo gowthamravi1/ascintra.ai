@@ -4,11 +4,21 @@ Ascintra.ai is an advanced Cloud Recovery Posture Management (CRPM) platform tha
 
 ## 🏗️ Architecture Overview
 
-The platform consists of three main components:
+The platform consists of four main components:
 
 - **Frontend**: Next.js 14 React application with TypeScript
 - **Backend**: FastAPI Python application with PostgreSQL and ArangoDB
+- **Fix Inventory**: Cloud resource discovery and inventory management system
 - **Compliance Scoreboard**: Streamlit application for compliance checking
+
+### 🔗 Integration with Fix Inventory
+
+Ascintra.ai integrates with Fix Inventory to provide comprehensive cloud resource discovery and management:
+
+- **Resource Discovery**: Automated discovery of AWS, GCP, and other cloud resources
+- **Inventory Management**: Real-time inventory of cloud assets and their protection status
+- **Configuration Tracking**: Monitor configuration changes and drift detection
+- **Compliance Assessment**: Evaluate compliance against frameworks like SOC 2 and DORA
 
 ## 🚀 Key Features
 
@@ -68,7 +78,15 @@ ascintra.ai/
 │   │   └── db/              # Database connections
 │   └── alembic/             # Database migrations
 ├── compliance-scoreboard/   # Streamlit compliance app
-└── docker-compose.yml       # Multi-service orchestration
+├── local-deployment/        # 🎯 Complete local setup with Fix Inventory
+│   ├── fix-inventory-compose.yml  # Fix Inventory services
+│   ├── ascintra-compose.yml       # Ascintra.ai services
+│   ├── start.sh                   # Automated startup script
+│   ├── stop.sh                    # Clean shutdown script
+│   ├── reset.sh                   # Complete reset script
+│   ├── README.md                  # Detailed setup instructions
+│   └── QUICK_REFERENCE.md         # Quick command reference
+└── docker-compose.yml       # Basic multi-service orchestration
 ```
 
 ## 🚀 Quick Start
@@ -78,7 +96,42 @@ ascintra.ai/
 - Node.js 18+ (for local development)
 - Python 3.9+ (for local development)
 
-### One-Command Setup
+### 🎯 Recommended: Local Deployment with Fix Inventory
+
+For the complete Ascintra.ai experience with cloud resource discovery and inventory management, use our integrated local deployment:
+
+```bash
+# Navigate to the local deployment folder
+cd local-deployment
+
+# Start everything with one command (includes Fix Inventory)
+./start.sh
+```
+
+**✅ What this includes:**
+- Ascintra.ai application (Frontend + Backend + Database)
+- Fix Inventory services (ArangoDB + Fix Core + Fix Worker)
+- Automated health checks and service readiness
+- Complete cloud resource discovery capabilities
+
+**📱 Access URLs:**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+- **Fix Inventory**: http://localhost:8900
+- **Prometheus**: http://localhost:9090
+
+**🔧 Management Commands:**
+```bash
+./start.sh    # Start everything
+./stop.sh     # Stop everything
+./reset.sh    # Reset everything (delete all data)
+```
+
+### Alternative: Basic Setup (Ascintra.ai Only)
+
+If you only need the core Ascintra.ai application without Fix Inventory:
+
 ```bash
 # Start all services (compliance data seeds automatically)
 docker-compose up -d
@@ -94,7 +147,15 @@ docker-compose up -d
    cd ascintra.ai
    ```
 
-2. **Start all services**
+2. **Choose your setup:**
+   
+   **Option A: Complete Setup (Recommended)**
+   ```bash
+   cd local-deployment
+   ./start.sh
+   ```
+   
+   **Option B: Basic Setup**
    ```bash
    docker-compose up -d
    ```
@@ -357,13 +418,23 @@ Visit http://localhost:8000/docs for interactive API documentation.
 
 #### Tenant Dashboard
 - **Overview**: Executive summary and key metrics
-- **Discovery**: Cloud account connection and scanning
-- **Inventory**: Asset management and coverage analysis
+- **Discovery**: Cloud account connection and scanning (integrated with Fix Inventory)
+- **Inventory**: Asset management and coverage analysis (powered by Fix Inventory)
 - **Posture**: Recovery scoring and compliance tracking
 - **Compliance**: Audit trails and policy management
-- **Drift**: Configuration change monitoring
+- **Drift**: Configuration change monitoring (Fix Inventory integration)
 - **Recovery Testing**: Backup validation and testing
 - **AI Assistant**: Intelligent recommendations and support
+
+### Local Deployment Workflow
+
+#### Complete Setup (Recommended)
+1. **Start Fix Inventory Services**: ArangoDB, Fix Core, Fix Worker, Fix Metrics
+2. **Start Ascintra.ai Services**: Frontend, Backend, PostgreSQL
+3. **Connect Cloud Accounts**: Add AWS/GCP credentials through the UI
+4. **Run Discovery Scans**: Discover and inventory cloud resources
+5. **Monitor Compliance**: Evaluate resources against compliance frameworks
+6. **Track Drift**: Monitor configuration changes over time
 
 ### Backend Services
 
@@ -423,6 +494,22 @@ npm test
 ```
 
 ## 🚀 Deployment
+
+### Local Development Deployment
+
+**🎯 Recommended: Complete Local Setup**
+```bash
+cd local-deployment
+./start.sh
+```
+
+This includes:
+- Ascintra.ai application
+- Fix Inventory services
+- Automated health checks
+- Complete cloud resource discovery
+
+**📚 Documentation**: See `local-deployment/README.md` for detailed instructions
 
 ### Production Considerations
 - Configure production database credentials

@@ -21,6 +21,9 @@ type AccountDetail = Account & {
   aws_external_id?: string
   gcp_project_number?: string
   gcp_sa_email?: string
+  credentials_json?: {
+    gcp?: any
+  }
   discovery_enabled?: boolean
   discovery_options?: Record<string, any>
   discovery_frequency?: string
@@ -124,9 +127,27 @@ export default function ConnectedAccountsList() {
               {selected.gcp_sa_email && (
                 <div className="flex justify-between"><span className="text-muted-foreground">GCP SA</span><span className="font-mono text-xs">{selected.gcp_sa_email}</span></div>
               )}
+              {selected.gcp_project_number && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Project Number</span><span className="font-mono text-xs">{selected.gcp_project_number}</span></div>
+              )}
+              {selected.credentials_json?.gcp && (
+                <div className="pt-2">
+                  <div className="text-muted-foreground mb-1">Service Account JSON</div>
+                  <pre className="bg-muted rounded p-3 text-xs overflow-x-auto max-h-40 overflow-y-auto">
+                    {JSON.stringify(selected.credentials_json.gcp, null, 2)}
+                  </pre>
+                </div>
+              )}
               <div className="pt-2">
                 <div className="text-muted-foreground mb-1">Discovery Options</div>
-                <pre className="bg-muted rounded p-3 text-xs overflow-x-auto">{JSON.stringify(selected.discovery_options || {}, null, 2)}</pre>
+                <pre className="bg-muted rounded p-3 text-xs overflow-x-auto">
+                  {JSON.stringify({
+                    discovery_enabled: selected.discovery_enabled,
+                    discovery_frequency: selected.discovery_frequency,
+                    preferred_time_utc: selected.preferred_time_utc,
+                    ...selected.discovery_options
+                  }, null, 2)}
+                </pre>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div>
