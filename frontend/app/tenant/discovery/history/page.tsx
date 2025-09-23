@@ -32,6 +32,13 @@ type Scan = {
   region: string
   progress?: number
   attachmentUrl?: string
+  // New progress tracking fields
+  scanType?: string
+  currentPhase?: string
+  phaseProgress?: number
+  totalPhases?: number
+  estimatedCompletion?: string
+  errorMessage?: string
 }
 
 const toDuration = (seconds: number) => {
@@ -61,15 +68,15 @@ const getStatusIcon = (status: string) => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case "completed":
-      return <Badge variant="success">Completed</Badge>
+      return <Badge variant="default">Completed</Badge>
     case "running":
-      return <Badge variant="info">Running</Badge>
+      return <Badge variant="secondary">Running</Badge>
     case "failed":
       return <Badge variant="destructive">Failed</Badge>
     case "cancelled":
-      return <Badge variant="secondary">Cancelled</Badge>
+      return <Badge variant="outline">Cancelled</Badge>
     default:
-      return <Badge variant="warning">Unknown</Badge>
+      return <Badge variant="secondary">Unknown</Badge>
   }
 }
 
@@ -91,15 +98,49 @@ const getTypeIcon = (type: string) => {
 const getTypeBadge = (type: string) => {
   switch (type) {
     case "full":
-      return <Badge variant="info">Full Scan</Badge>
+      return <Badge variant="default">Full Scan</Badge>
     case "incremental":
-      return <Badge variant="success">Incremental</Badge>
+      return <Badge variant="default">Incremental</Badge>
     case "compliance":
-      return <Badge variant="warning">Compliance</Badge>
+      return <Badge variant="secondary">Compliance</Badge>
     case "backup-validation":
-      return <Badge variant="secondary">Backup Validation</Badge>
+      return <Badge variant="outline">Backup Validation</Badge>
     default:
       return <Badge variant="outline">Unknown</Badge>
+  }
+}
+
+const getPhaseDescription = (phase: string) => {
+  switch (phase) {
+    case "initializing":
+      return "Initializing scan..."
+    case "discovering":
+      return "Discovering resources..."
+    case "analyzing":
+      return "Analyzing resources..."
+    case "materializing":
+      return "Processing data..."
+    case "finalizing":
+      return "Finalizing results..."
+    default:
+      return "Processing..."
+  }
+}
+
+const getPhaseIcon = (phase: string) => {
+  switch (phase) {
+    case "initializing":
+      return <RefreshCw className="h-3 w-3 animate-spin" />
+    case "discovering":
+      return <Search className="h-3 w-3" />
+    case "analyzing":
+      return <Activity className="h-3 w-3" />
+    case "materializing":
+      return <Database className="h-3 w-3" />
+    case "finalizing":
+      return <CheckCircle className="h-3 w-3" />
+    default:
+      return <Clock className="h-3 w-3" />
   }
 }
 
@@ -113,6 +154,7 @@ export default function DiscoveryHistory() {
   const [metrics, setMetrics] = useState({ total: 0, successRate: 0, avgDuration: 0, resources: 0 })
   const [newScanOpen, setNewScanOpen] = useState(false)
   const [newScanAccountId, setNewScanAccountId] = useState<string | null>(null)
+  const [runningScans, setRunningScans] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const load = async () => {
@@ -153,6 +195,56 @@ export default function DiscoveryHistory() {
     }
     load()
   }, [])
+
+  // Auto-refresh for running scans
+  useEffect(() => {
+    const runningScanIds = scans.filter(s => s.status === "running").map(s => s.id)
+    setRunningScans(new Set(runningScanIds))
+    
+    if (runningScanIds.length === 0) return
+
+    const interval = setInterval(async () => {
+      try {
+        // Update progress for each running scan
+        const updatedScans = await Promise.all(
+          scans.map(async (scan) => {
+            if (scan.status === "running") {
+              try {
+                const progressRes = await fetch(`/api/tenant/discovery/history/progress/${scan.id}`, { cache: "no-store" })
+                if (progressRes.ok) {
+                  const progressData = await progressRes.json()
+                  return {
+                    ...scan,
+                    progress: progressData.overall_progress,
+                    currentPhase: progressData.current_phase,
+                    phaseProgress: progressData.phase_progress,
+                    totalPhases: progressData.total_phases,
+                    estimatedCompletion: progressData.estimated_completion,
+                    errorMessage: progressData.error_message,
+                    status: progressData.status
+                  }
+                }
+              } catch (e) {
+                console.error(`Failed to get progress for scan ${scan.id}:`, e)
+              }
+            }
+            return scan
+          })
+        )
+        
+        setScans(updatedScans)
+        
+        // Remove completed scans from running set
+        const stillRunning = updatedScans.filter(s => s.status === "running").map(s => s.id)
+        setRunningScans(new Set(stillRunning))
+        
+      } catch (e) {
+        console.error("Failed to update scan progress:", e)
+      }
+    }, 2000) // Poll every 2 seconds
+
+    return () => clearInterval(interval)
+  }, [scans.filter(s => s.status === "running").length]) // Re-run when running scans change
 
   const filteredScans = scans.filter((scan) => {
     const matchesSearch =
@@ -350,8 +442,38 @@ export default function DiscoveryHistory() {
                       <div>
                         <div className="font-medium">{scan.id}</div>
                         <div className="text-xs text-muted-foreground">Started: {scan.startTime}</div>
-                        {scan.progress !== undefined && (
+                        {scan.status === "running" && scan.currentPhase && (
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center gap-2 text-xs text-blue-600">
+                              {getPhaseIcon(scan.currentPhase)}
+                              <span>{getPhaseDescription(scan.currentPhase)}</span>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Phase {scan.currentPhase}</span>
+                                <span>{scan.phaseProgress || 0}%</span>
+                              </div>
+                              <Progress value={scan.phaseProgress || 0} className="h-1" />
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Overall</span>
+                                <span>{scan.progress || 0}%</span>
+                              </div>
+                              <Progress value={scan.progress || 0} className="h-1" />
+                            </div>
+                            {scan.estimatedCompletion && (
+                              <div className="text-xs text-muted-foreground">
+                                ETA: {new Date(scan.estimatedCompletion).toLocaleTimeString()}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {scan.status === "running" && scan.progress !== undefined && !scan.currentPhase && (
                           <div className="text-[10px] text-blue-600 mt-1">{scan.progress}% complete</div>
+                        )}
+                        {scan.status === "failed" && scan.errorMessage && (
+                          <div className="text-xs text-red-600 mt-1 max-w-xs truncate" title={scan.errorMessage}>
+                            Error: {scan.errorMessage}
+                          </div>
                         )}
                       </div>
                     </TableCell>
@@ -465,9 +587,9 @@ export default function DiscoveryHistory() {
                                 <h4 className="font-medium">Recovery Findings</h4>
                                 <div className="grid gap-2 md:grid-cols-4">
                                   <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Critical</span><Badge variant="destructive">{selectedScan.findings.critical}</Badge></div>
-                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">High</span><Badge variant="warning">{selectedScan.findings.high}</Badge></div>
-                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Medium</span><Badge variant="info">{selectedScan.findings.medium}</Badge></div>
-                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Low</span><Badge variant="secondary">{selectedScan.findings.low}</Badge></div>
+                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">High</span><Badge variant="secondary">{selectedScan.findings.high}</Badge></div>
+                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Medium</span><Badge variant="default">{selectedScan.findings.medium}</Badge></div>
+                                  <div className="flex items-center justify-between p-2 border rounded"><span className="text-sm">Low</span><Badge variant="outline">{selectedScan.findings.low}</Badge></div>
                                 </div>
                               </div>
                             </div>

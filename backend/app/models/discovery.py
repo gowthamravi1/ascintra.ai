@@ -15,7 +15,7 @@ class ScanItem(BaseModel):
     id: str
     account_name: str
     account_id: str
-    type: str  # full | incremental | compliance | backup-validation
+    type: str  # full | incremental | compliance | backup-validation (legacy)
     status: str  # completed | running | failed | cancelled
     start_time: str
     end_time: Optional[str] = None
@@ -29,6 +29,16 @@ class ScanItem(BaseModel):
     region: str
     progress: Optional[int] = None
     attachment_url: Optional[str] = None
+    
+    # New progress tracking fields
+    scan_type: str  # inventory | vulnerability | compliance | backup_validation | drift_detection | cost_optimization
+    current_phase: Optional[str] = None  # initializing | discovering | analyzing | materializing | finalizing
+    phase_progress: Optional[int] = None  # 0-100 progress within current phase
+    total_phases: Optional[int] = None  # Total number of phases for this scan type
+    current_phase_start: Optional[str] = None  # When current phase started
+    estimated_completion: Optional[str] = None  # Estimated completion time
+    error_message: Optional[str] = None  # Error details if scan failed
+    scan_metadata: Optional[dict] = None  # Additional scan-specific data
 
 
 class ScanSummary(BaseModel):

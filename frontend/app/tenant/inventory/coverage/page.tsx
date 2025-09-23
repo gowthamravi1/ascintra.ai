@@ -44,7 +44,20 @@ import { useEffect } from "react"
 import Link from "next/link"
 
 type CoverageService = { service: string; total: number; protected: number; partial: number; unprotected: number; coverage: number; trend?: string }
-type CoverageItem = { id: string; name: string; type: string; service: string; region: string; status: string; last_backup?: string | null }
+type CoverageItem = { 
+  id: string; 
+  name: string; 
+  type: string; 
+  service: string; 
+  region: string; 
+  status: string; 
+  last_backup?: string | null;
+  nextBackup?: string;
+  rto?: string;
+  rpo?: string;
+  policy?: string;
+  cost?: string;
+}
 
 const distColors = {
   Protected: "#10b981",

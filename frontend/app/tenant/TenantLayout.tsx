@@ -43,6 +43,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { useNavigationData } from "@/hooks/use-navigation-data"
 
 interface NavigationItem {
   name: string
@@ -50,9 +51,11 @@ interface NavigationItem {
   icon: React.ComponentType<{ className?: string }>
   badge?: string
   children?: NavigationItem[]
+  warning?: string
 }
 
-const navigation: NavigationItem[] = [
+// Function to create navigation with dynamic data
+const createNavigation = (navData: any): NavigationItem[] => [
   {
     name: "Overview",
     href: "/tenant/overview",
@@ -62,6 +65,7 @@ const navigation: NavigationItem[] = [
     name: "Discovery",
     href: "/tenant/discovery",
     icon: Search,
+    badge: navData?.discovery?.badge || "0",
     children: [
       { name: "Connect Sources", href: "/tenant/discovery/connect", icon: Zap },
       { name: "Connected Accounts", href: "/tenant/discovery/connect/list", icon: Users },
@@ -72,51 +76,50 @@ const navigation: NavigationItem[] = [
     name: "Inventory",
     href: "/tenant/inventory",
     icon: Database,
-    badge: "1,247",
+    badge: navData?.inventory?.badge || "0",
     children: [
       { name: "All Assets", href: "/tenant/inventory", icon: Database },
       { name: "Coverage Analysis", href: "/tenant/inventory/coverage", icon: Eye },
-      { name: "Asset Details", href: "/tenant/inventory/details", icon: FileText },
     ],
   },
   {
     name: "Recovery Posture",
     href: "/tenant/posture",
     icon: Shield,
-    badge: "87%",
+    badge: navData?.recovery_posture?.badge || "0%",
     children: [
       { name: "Scorecard", href: "/tenant/posture/scorecard", icon: BarChart3 },
-      { name: "RTO/RPO Analysis", href: "/tenant/posture/rto-rpo", icon: TrendingUp },
-      { name: "Trends", href: "/tenant/posture/trends", icon: TrendingUp },
-      { name: "Posture Map", href: "/tenant/posture/map", icon: Map },
+      { name: "RTO/RPO Analysis", href: "/tenant/posture/rto-rpo", icon: TrendingUp, warning: "Mock Screen" },
+      { name: "Trends", href: "/tenant/posture/trends", icon: TrendingUp, warning: "Mock Screen" },
+      { name: "Posture Map", href: "/tenant/posture/map", icon: Map, warning: "Mock Screen" },
     ],
   },
   {
     name: "Recovery Testing",
     href: "/tenant/recovery-testing",
     icon: TestTube,
-    badge: "5",
+    badge: navData?.recovery_testing?.badge || "0",
     children: [
-      { name: "Test Dashboard", href: "/tenant/recovery-testing/dashboard", icon: LayoutDashboard },
-      { name: "Test Simulator", href: "/tenant/recovery-testing/simulator", icon: TestTube },
+      { name: "Test Dashboard", href: "/tenant/recovery-testing/dashboard", icon: LayoutDashboard, warning: "Mock Screen" },
+      { name: "Test Simulator", href: "/tenant/recovery-testing/simulator", icon: TestTube, warning: "Mock Screen" },
     ],
   },
   {
     name: "Configuration Drift",
     href: "/tenant/drift",
     icon: GitBranch,
-    badge: "12",
+    badge: navData?.drift?.badge || "0",
     children: [
       { name: "Drift Overview", href: "/tenant/drift/overview", icon: LayoutDashboard },
       { name: "Drift History", href: "/tenant/drift/history", icon: FileText },
-      { name: "Drift Policies", href: "/tenant/drift/policies", icon: Settings },
+      { name: "Drift Policies", href: "/tenant/drift/policies", icon: Settings, warning: "Mock Screen" },
     ],
   },
   {
     name: "Compliance",
     href: "/tenant/compliance",
     icon: CheckCircle,
-    badge: "SOC 2",
+    badge: navData?.compliance?.badge || "N/A",
     children: [
       { name: "Compliance Dashboard", href: "/tenant/compliance", icon: LayoutDashboard },
       { name: "Audit Reports", href: "/tenant/compliance/audit", icon: FileText },
@@ -129,8 +132,8 @@ const navigation: NavigationItem[] = [
     icon: Brain,
     badge: "New",
     children: [
-      { name: "Assistant Dashboard", href: "/tenant/ai-assistant", icon: LayoutDashboard },
-      { name: "Chat Interface", href: "/tenant/ai-assistant/chat", icon: Brain },
+      { name: "Assistant Dashboard", href: "/tenant/ai-assistant", icon: LayoutDashboard, warning: "Mock Screen" },
+      { name: "Chat Interface", href: "/tenant/ai-assistant/chat", icon: Brain, warning: "Mock Screen" },
     ],
   },
   {
@@ -138,8 +141,8 @@ const navigation: NavigationItem[] = [
     href: "/tenant/copilot",
     icon: Brain,
     children: [
-      { name: "Copilot Dashboard", href: "/tenant/copilot", icon: LayoutDashboard },
-      { name: "Chat with Copilot", href: "/tenant/copilot/chat", icon: Brain },
+      { name: "Copilot Dashboard", href: "/tenant/copilot", icon: LayoutDashboard, warning: "Mock Screen" },
+      { name: "Chat with Copilot", href: "/tenant/copilot/chat", icon: Brain, warning: "Mock Screen" },
     ],
   },
   {
@@ -147,10 +150,10 @@ const navigation: NavigationItem[] = [
     href: "/tenant/executive",
     icon: Users,
     children: [
-      { name: "CISO Dashboard", href: "/tenant/executive/ciso", icon: Shield },
-      { name: "CIO Dashboard", href: "/tenant/executive/cio", icon: LayoutDashboard },
-      { name: "CloudOps Dashboard", href: "/tenant/executive/cloudops", icon: Activity },
-      { name: "Risk Heatmap", href: "/tenant/executive/risk-heatmap", icon: AlertTriangle },
+      { name: "CISO Dashboard", href: "/tenant/executive/ciso", icon: Shield, warning: "Mock Screen" },
+      { name: "CIO Dashboard", href: "/tenant/executive/cio", icon: LayoutDashboard, warning: "Mock Screen" },
+      { name: "CloudOps Dashboard", href: "/tenant/executive/cloudops", icon: Activity, warning: "Mock Screen" },
+      { name: "Risk Heatmap", href: "/tenant/executive/risk-heatmap", icon: AlertTriangle, warning: "Mock Screen" },
     ],
   },
 ]
@@ -164,6 +167,12 @@ export function TenantLayout({ children }: TenantLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(true)
   const [expandedItems, setExpandedItems] = React.useState<string[]>([])
+  
+  // Get navigation data
+  const { data: navData, loading: navLoading, error: navError, refetch: refetchNav } = useNavigationData("142141431503")
+  
+  // Create navigation with dynamic data
+  const navigation = createNavigation(navData)
 
   const isActiveRoute = (href: string) => {
     if (href === "/tenant/overview") {
@@ -252,7 +261,17 @@ export function TenantLayout({ children }: TenantLayoutProps) {
                       onClick={() => mobile && setMobileMenuOpen(false)}
                     >
                       <child.icon className="mr-3 h-4 w-4 flex-shrink-0" />
-                      {child.name}
+                      <span className="flex-1">{child.name}</span>
+                      {child.warning && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{child.warning}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </Link>
                   ))}
                 </div>

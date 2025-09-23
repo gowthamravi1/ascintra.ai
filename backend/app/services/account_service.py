@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import List
 
@@ -12,6 +13,8 @@ from app.models.account_detail import AccountDetail
 from app.orm.models import CloudAccount
 from fastapi import HTTPException
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 
 class AccountService:
@@ -32,6 +35,26 @@ class AccountService:
                 if data.primary_region:
                     aws_creds.setdefault("region", data.primary_region)
                 creds["aws"] = aws_creds
+
+            # Handle GCP credentials and config update
+            logger.info(f"DEBUG: Account creation - provider={data.provider}, has_creds={bool(data.credentials_json)}, gcp_in_creds={'gcp' in data.credentials_json if data.credentials_json else False}")
+            if data.provider == "gcp" and data.credentials_json and "gcp" in data.credentials_json:
+                gcp_creds = data.credentials_json["gcp"]
+                logger.info(f"DEBUG: GCP credentials found, calling ConfigService.update_fix_worker_gcp_credentials")
+                # Update Fix Inventory Worker config with GCP credentials
+                try:
+                    from app.services.config_service import ConfigService
+                    config_updated = ConfigService().update_fix_worker_gcp_credentials(
+                        project_id=data.account_identifier,
+                        service_account_json=gcp_creds,
+                        project_number=data.gcp_project_number
+                    )
+                    if not config_updated:
+                        logger.warning(f"Failed to update Fix Inventory Worker config for GCP project {data.account_identifier}")
+                except Exception as e:
+                    logger.warning(f"Error updating Fix Inventory Worker config for GCP: {e}")
+            else:
+                logger.info(f"DEBUG: GCP config update skipped - provider={data.provider}, has_creds={bool(data.credentials_json)}")
 
             obj = CloudAccount(
                 provider=data.provider,

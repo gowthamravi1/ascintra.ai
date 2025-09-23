@@ -1,274 +1,361 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Info, ExternalLink, Copy, Shield, Settings, Tag, Clock, MapPin } from "lucide-react"
+import { ArrowLeft, Shield, AlertTriangle, Database, ExternalLink, Copy, CheckCircle } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 
-type ResourceData = {
-  id: string
-  name: string
-  type: string
-  service: string
-  region?: string
-  account?: string
-  status?: string
-  created?: string
-  lastModified?: string
-  last_backup?: string | null
-  tags?: Record<string, string>
+interface AssetDetails {
+  asset_id: string
+  arango_id: string
+  account_info: {
+    account_id: string
+    account_name: string
+    provider: string
+    region: string
+  }
+  inventory_data: {
+    service: string
+    kind: string
+    resource_id: string
+    name: string
+    provider: string
+    status: string
+    region: string | null
+    last_backup: string | null
+    tags: Record<string, any>
+    created_at: string
+    updated_at: string
+  }
+  arango_document: Record<string, any>
+  metadata: {
+    total_size: number
+    document_keys: string[]
+    kinds: string[]
+    reported_fields: string[]
+  }
 }
 
-const securityFindings = [
-  {
-    id: "finding-001",
-    severity: "high",
-    title: "Security group allows unrestricted SSH access",
-    description: "Security group sg-0123456789abcdef0 allows SSH (port 22) access from 0.0.0.0/0",
-    framework: "CIS AWS",
-    control: "4.1",
-    status: "open",
-    firstSeen: "2024-01-15T14:30:00Z",
-    recommendation: "Restrict SSH access to specific IP ranges or use AWS Systems Manager Session Manager",
-  },
-  {
-    id: "finding-002",
-    severity: "medium",
-    title: "Instance not using IMDSv2",
-    description: "EC2 instance is not configured to require IMDSv2 for metadata access",
-    framework: "AWS Security Best Practices",
-    control: "EC2.8",
-    status: "acknowledged",
-    firstSeen: "2024-01-12T10:15:00Z",
-    recommendation: "Configure the instance to require IMDSv2 for enhanced security",
-  },
-  {
-    id: "finding-003",
-    severity: "low",
-    title: "Missing recommended tags",
-    description: "Instance is missing recommended tags: Owner, Project",
-    framework: "Organizational Policy",
-    control: "TAG.1",
-    status: "open",
-    firstSeen: "2024-01-10T14:30:00Z",
-    recommendation: "Add Owner and Project tags for better resource management",
-  },
-]
+export default function AssetDetailsPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const [assetDetails, setAssetDetails] = useState<AssetDetails | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
 
-// Configuration details are loaded dynamically from backend
-
-export default function ResourceDetailsPage() {
-  const [activeTab, setActiveTab] = useState("overview")
-  const [resourceData, setResourceData] = useState<ResourceData | null>(null)
-  const [configuration, setConfiguration] = useState<Record<string, any>>({})
-  const [metadata, setMetadata] = useState<Record<string, any>>({})
-  const params = useSearchParams()
+  const assetId = searchParams.get('id')
 
   useEffect(() => {
-    const id = params.get("id")
-    if (!id) return
-    const load = async () => {
+    if (!assetId) {
+      setError("Asset ID is required")
+      setLoading(false)
+      return
+    }
+
+    const fetchAssetDetails = async () => {
       try {
-        const res = await fetch(`/api/tenant/inventory/details/${encodeURIComponent(id)}`, { cache: "no-store" })
-        const data = await res.json()
-        if (data?.ok && data?.item) {
-          const it = data.item
-          setResourceData({
-            id: it.id,
-            name: it.name,
-            type: it.type,
-            service: it.service,
-            region: it.region,
-            account: it.account_id,
-            status: it.status,
-            last_backup: it.last_backup,
-            tags: it.metadata?.tags || it.tags || {},
-          })
-          setConfiguration(it.configuration || {})
-          setMetadata(it.metadata || {})
+        setLoading(true)
+        const response = await fetch(`/api/tenant/inventory/asset/${assetId}?account_identifier=142141431503`)
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch asset details: ${response.statusText}`)
         }
-      } catch {}
+        
+        const result = await response.json()
+        
+        if (result.success) {
+          setAssetDetails(result.data)
+        } else {
+          throw new Error("Failed to fetch asset details")
+        }
+      } catch (err) {
+        console.error('Error fetching asset details:', err)
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      } finally {
+        setLoading(false)
+      }
     }
-    load()
-  }, [params])
 
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case "critical":
-        return <Badge variant="critical">Critical</Badge>
-      case "high":
-        return <Badge variant="critical">High</Badge>
-      case "medium":
-        return <Badge variant="warning">Medium</Badge>
-      case "low":
-        return <Badge variant="secondary">Low</Badge>
-      default:
-        return <Badge variant="secondary">{severity}</Badge>
+    fetchAssetDetails()
+  }, [assetId])
+
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedField(field)
+      toast({
+        title: "Copied to clipboard",
+        description: `${field} copied successfully`,
+      })
+      setTimeout(() => setCopiedField(null), 2000)
+    } catch (err) {
+      toast({
+        title: "Copy failed",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      })
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "open":
-        return <Badge variant="critical">Open</Badge>
-      case "acknowledged":
-        return <Badge variant="warning">Acknowledged</Badge>
-      case "resolved":
-        return <Badge variant="success">Resolved</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
+  const getStatusBadgeVariant = (status: string) => {
+    if (status.includes('protected')) return "success"
+    if (status.includes('unprotected')) return "critical"
+    return "secondary"
+  }
+
+  const getStatusIcon = (status: string) => {
+    if (status.includes('protected')) return <Shield className="h-4 w-4 text-green-600" />
+    if (status.includes('unprotected')) return <AlertTriangle className="h-4 w-4 text-red-600" />
+    return <AlertTriangle className="h-4 w-4 text-yellow-600" />
+  }
+
+  const formatValue = (value: any): string => {
+    if (value === null || value === undefined) return "N/A"
+    if (typeof value === 'object') return JSON.stringify(value, null, 2)
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+    if (typeof value === 'string' && value.includes('T') && value.includes('Z')) {
+      return new Date(value).toLocaleString()
     }
+    return String(value)
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const renderObject = (obj: any, depth = 0): JSX.Element => {
+    if (obj === null || obj === undefined) return <span className="text-muted-foreground">N/A</span>
+    
+    if (typeof obj !== 'object') {
+      return <span>{formatValue(obj)}</span>
+    }
+
+    if (Array.isArray(obj)) {
+      return (
+        <div className="space-y-1">
+          {obj.map((item, index) => (
+            <div key={index} className="ml-4">
+              <span className="text-muted-foreground">[{index}]</span> {renderObject(item, depth + 1)}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-1">
+        {Object.entries(obj).map(([key, value]) => (
+          <div key={key} className="ml-4">
+            <span className="font-medium text-blue-600">{key}:</span> {renderObject(value, depth + 1)}
+          </div>
+        ))}
+      </div>
+    )
   }
 
-  if (!resourceData) {
-    return <div className="p-6">Loading...</div>
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="space-y-4">
+          <div className="h-32 bg-gray-200 rounded animate-pulse" />
+          <div className="h-64 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !assetDetails) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <h1 className="text-3xl font-bold text-foreground">Asset Details</h1>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-red-600">
+              <AlertTriangle className="h-12 w-12 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Error Loading Asset</h3>
+              <p className="text-muted-foreground">{error || "Asset not found"}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold text-foreground">{resourceData.name}</h1>
-            <Badge variant="success">{resourceData.status || ""}</Badge>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Shield className="h-4 w-4" />
-              <span>{resourceData.type}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
-              <span>{resourceData.region || ""}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              {resourceData.last_backup && <span>Last backup {new Date(resourceData.last_backup).toLocaleString()}</span>}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 bg-transparent">
-            <ExternalLink className="h-4 w-4" />
-            View in AWS Console
-          </Button>
-          <Button variant="outline" className="gap-2 bg-transparent">
-            <Settings className="h-4 w-4" />
-            Manage Resource
-          </Button>
+          <h1 className="text-3xl font-bold text-foreground">{assetDetails.inventory_data.name}</h1>
+          <p className="text-muted-foreground">{assetDetails.inventory_data.kind} • {assetDetails.inventory_data.resource_id}</p>
         </div>
       </div>
 
-      {/* Resource ID Card */}
+      {/* Status Card */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Resource ID</p>
-                <p className="font-mono text-sm">{resourceData.id}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Account</p>
-                <p className="font-mono text-sm">{resourceData.account || ""}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Service</p>
-                <p className="text-sm">{resourceData.service}</p>
-              </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {getStatusIcon(assetDetails.inventory_data.status)}
+            Asset Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Protection Status</p>
+              <Badge variant={getStatusBadgeVariant(assetDetails.inventory_data.status)} className="mt-1">
+                {assetDetails.inventory_data.status}
+              </Badge>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => copyToClipboard(resourceData.id)}
-              className="gap-2 bg-transparent"
-            >
-              <Copy className="h-4 w-4" />
-              Copy ID
-            </Button>
+            <div>
+              <p className="text-sm text-muted-foreground">Service</p>
+              <p className="font-medium">{assetDetails.inventory_data.service}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Provider</p>
+              <p className="font-medium">{assetDetails.inventory_data.provider}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+      {/* Main Content */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="security">Security Findings</TabsTrigger>
-          <TabsTrigger value="configuration">Configuration</TabsTrigger>
+          <TabsTrigger value="inventory">Inventory Data</TabsTrigger>
+          <TabsTrigger value="arango">Raw Document</TabsTrigger>
           <TabsTrigger value="metadata">Metadata</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          {/* Security Summary */}
+        <TabsContent value="overview" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Security Summary</CardTitle>
-              <CardDescription>Overview of security findings for this resource</CardDescription>
+              <CardTitle>Basic Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Asset ID</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-gray-100 px-2 py-1 rounded">{assetDetails.asset_id}</code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(assetDetails.asset_id, 'Asset ID')}
+                    >
+                      {copiedField === 'Asset ID' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Arango ID</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-gray-100 px-2 py-1 rounded">{assetDetails.arango_id}</code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(assetDetails.arango_id, 'Arango ID')}
+                    >
+                      {copiedField === 'Arango ID' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Resource ID</p>
+                  <p className="font-medium">{assetDetails.inventory_data.resource_id}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Region</p>
+                  <p className="font-medium">{assetDetails.inventory_data.region || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Last Backup</p>
+                  <p className="font-medium">{assetDetails.inventory_data.last_backup || 'Never'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Created</p>
+                  <p className="font-medium">{new Date(assetDetails.inventory_data.created_at).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {Object.keys(assetDetails.inventory_data.tags).length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Tags</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(assetDetails.inventory_data.tags).map(([key, value]) => (
+                        <Badge key={key} variant="outline">
+                          {key}: {String(value)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Account Information</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-critical">1</div>
-                  <div className="text-sm text-muted-foreground">High Severity</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Account ID</p>
+                  <p className="font-medium">{assetDetails.account_info.account_id}</p>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-warning">1</div>
-                  <div className="text-sm text-muted-foreground">Medium Severity</div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Account Name</p>
+                  <p className="font-medium">{assetDetails.account_info.account_name}</p>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-secondary">1</div>
-                  <div className="text-sm text-muted-foreground">Low Severity</div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Provider</p>
+                  <p className="font-medium">{assetDetails.account_info.provider}</p>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">3</div>
-                  <div className="text-sm text-muted-foreground">Total Findings</div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Primary Region</p>
+                  <p className="font-medium">{assetDetails.account_info.region}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
 
-          {/* Recent Findings */}
+        <TabsContent value="inventory" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Findings</CardTitle>
-              <CardDescription>Latest security findings for this resource</CardDescription>
+              <CardTitle>Inventory Data</CardTitle>
+              <CardDescription>Data stored in PostgreSQL assets_inventory table</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {securityFindings.slice(0, 3).map((finding) => (
-                  <div key={finding.id} className="flex items-start gap-4 p-4 border rounded-lg">
-                    <div className="mt-1">
-                      {finding.severity === "high" ? (
-                        <AlertTriangle className="h-5 w-5 text-critical" />
-                      ) : finding.severity === "medium" ? (
-                        <AlertTriangle className="h-5 w-5 text-warning" />
-                      ) : (
-                        <Info className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="font-medium">{finding.title}</h4>
-                        {getSeverityBadge(finding.severity)}
-                        {getStatusBadge(finding.status)}
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">{finding.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>
-                          {finding.framework} - {finding.control}
-                        </span>
-                        <span>First seen: {new Date(finding.firstSeen).toLocaleDateString()}</span>
-                      </div>
+                {Object.entries(assetDetails.inventory_data).map(([key, value]) => (
+                  <div key={key}>
+                    <p className="text-sm font-medium text-muted-foreground">{key}</p>
+                    <div className="mt-1 p-3 bg-gray-50 rounded-md">
+                      <pre className="text-sm whitespace-pre-wrap">{formatValue(value)}</pre>
                     </div>
                   </div>
                 ))}
@@ -277,206 +364,61 @@ export default function ResourceDetailsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="security" className="space-y-6">
+        <TabsContent value="arango" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Security Findings</CardTitle>
-              <CardDescription>All security findings for this resource</CardDescription>
+              <CardTitle>Raw ArangoDB Document</CardTitle>
+              <CardDescription>Complete document from ArangoDB fix collection</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                {securityFindings.map((finding) => (
-                  <Card key={finding.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          {finding.severity === "high" ? (
-                            <AlertTriangle className="h-5 w-5 text-critical" />
-                          ) : finding.severity === "medium" ? (
-                            <AlertTriangle className="h-5 w-5 text-warning" />
-                          ) : (
-                            <Info className="h-5 w-5 text-muted-foreground" />
-                          )}
-                          <div>
-                            <h4 className="font-medium">{finding.title}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              {getSeverityBadge(finding.severity)}
-                              {getStatusBadge(finding.status)}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right text-sm text-muted-foreground">
-                          <div>First seen: {new Date(finding.firstSeen).toLocaleDateString()}</div>
-                          <div>
-                            {finding.framework} - {finding.control}
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-sm text-muted-foreground mb-4">{finding.description}</p>
-
-                      <div className="bg-muted/50 p-3 rounded-lg mb-4">
-                        <p className="text-sm">
-                          <strong>Recommendation:</strong> {finding.recommendation}
-                        </p>
-                      </div>
-
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" className="bg-transparent">
-                          Mark as Acknowledged
-                        </Button>
-                        <Button variant="outline" size="sm" className="bg-transparent">
-                          Create Ticket
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+              <div className="space-y-4">
+                {Object.entries(assetDetails.arango_document).map(([key, value]) => (
+                  <div key={key}>
+                    <p className="text-sm font-medium text-muted-foreground">{key}</p>
+                    <div className="mt-1 p-3 bg-gray-50 rounded-md max-h-64 overflow-y-auto">
+                      {renderObject(value)}
+                    </div>
+                  </div>
                 ))}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="configuration" className="space-y-6">
+        <TabsContent value="metadata" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Resource Configuration</CardTitle>
-              <CardDescription>Current configuration settings for this resource</CardDescription>
+              <CardTitle>Document Metadata</CardTitle>
+              <CardDescription>Information about the ArangoDB document structure</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Instance Details</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Instance Type:</span>
-                        <span className="font-mono">{String(configuration.instanceType ?? '')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">AMI ID:</span>
-                        <span className="font-mono">{String(configuration.ami ?? '')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Key Pair:</span>
-                        <span className="font-mono">{String(configuration.keyPair ?? '')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">IAM Role:</span>
-                        <span className="font-mono">{String(configuration.iamRole ?? '')}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div>
-                    <h4 className="font-medium mb-2">Network Configuration</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">VPC:</span>
-                        <span className="font-mono">{String(configuration.vpc ?? '')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Subnet:</span>
-                        <span className="font-mono">{String(configuration.subnet ?? '')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Public IP:</span>
-                        <span className="font-mono">{String(configuration.publicIp ?? '')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Private IP:</span>
-                        <span className="font-mono">{String(configuration.privateIp ?? '')}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                    <div className="space-y-4">
-                      {Array.isArray(configuration?.securityGroups) && configuration.securityGroups.length > 0 && (
-                        <div>
-                          <h4 className="font-medium mb-2">Security Groups</h4>
-                          <div className="space-y-2">
-                            {configuration.securityGroups.map((sg: any) => (
-                              <div key={String(sg)} className="flex items-center justify-between p-2 border rounded">
-                                <span className="font-mono text-sm">{String(sg)}</span>
-                                <Button variant="outline" size="sm" className="bg-transparent">
-                                  <ExternalLink className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <Separator />
-
-                      <div>
-                        <h4 className="font-medium mb-2">Configuration</h4>
-                        <div className="space-y-2 text-sm">
-                          {Object.entries(configuration).filter(([k]) => k !== 'securityGroups').map(([key, val]) => (
-                            <div key={key} className="flex justify-between">
-                              <span className="text-muted-foreground">{key}:</span>
-                              <span className="font-mono">
-                                {typeof val === 'boolean' ? (val ? 'enabled' : 'disabled') : String(val ?? '')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="metadata" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Resource Metadata</CardTitle>
-              <CardDescription>Tags and additional metadata for this resource</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div>
-                  <h4 className="font-medium mb-4 flex items-center gap-2">
-                    <Tag className="h-4 w-4" />
-                    Resource Tags
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {Object.entries((resourceData.tags || {}) as Record<string, string>).map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium text-sm">{key}</div>
-                          <div className="text-sm text-muted-foreground">{value}</div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(`${key}=${value}`)}
-                          className="gap-2 bg-transparent"
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
+                  <p className="text-sm font-medium text-muted-foreground">Document Size</p>
+                  <p className="font-medium">{assetDetails.metadata.total_size} characters</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Document Keys</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {assetDetails.metadata.document_keys.map((key) => (
+                      <Badge key={key} variant="outline">{key}</Badge>
                     ))}
                   </div>
                 </div>
-
-                <Separator />
-
                 <div>
-                  <h4 className="font-medium mb-4">Lifecycle Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-3 border rounded-lg">
-                      <div className="text-sm text-muted-foreground">Created</div>
-                      <div className="font-medium">{metadata.created ? new Date(metadata.created).toLocaleString() : ''}</div>
-                    </div>
-                    <div className="p-3 border rounded-lg">
-                      <div className="text-sm text-muted-foreground">Last Modified</div>
-                      <div className="font-medium">{resourceData.last_backup ? new Date(resourceData.last_backup).toLocaleString() : ''}</div>
-                    </div>
+                  <p className="text-sm font-medium text-muted-foreground">Resource Kinds</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {assetDetails.metadata.kinds.map((kind) => (
+                      <Badge key={kind} variant="secondary">{kind}</Badge>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Reported Fields</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {assetDetails.metadata.reported_fields.map((field) => (
+                      <Badge key={field} variant="outline">{field}</Badge>
+                    ))}
                   </div>
                 </div>
               </div>

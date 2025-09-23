@@ -85,7 +85,7 @@ def get_inventory_coverage():
         }
         coverage_pct = round((prot / total * 100.0), 1) if total else 0.0
 
-        # Lightweight items list for tables (id, name, type, service, region, status, last_backup)
+        # Lightweight items list for tables with additional fields for frontend
         items_rows = session.execute(
             select(
                 AssetsInventory.resource_id,
@@ -106,6 +106,12 @@ def get_inventory_coverage():
                 "region": r.region,
                 "status": r.status,
                 "last_backup": (r.last_backup.isoformat() if r.last_backup else None),
+                # Additional fields for frontend compatibility
+                "nextBackup": "N/A",  # Placeholder - would need backup schedule data
+                "rto": "N/A",  # Placeholder - would need RTO/RPO data
+                "rpo": "N/A",  # Placeholder - would need RTO/RPO data
+                "policy": "None",  # Placeholder - would need backup policy data
+                "cost": "$0.00",  # Placeholder - would need cost data
             }
             for r in items_rows
         ]

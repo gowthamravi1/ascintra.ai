@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple API Test</title>
+</head>
+<body>
+    <h1>Simple API Test</h1>
+    <button onclick="testComplianceAPI()">Test Compliance API</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testComplianceAPI() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                // Test frameworks
+                console.log('Testing frameworks...');
+                const frameworksResponse = await fetch('http://localhost:8000/api/compliance/frameworks');
+                const frameworks = await frameworksResponse.json();
+                console.log('Frameworks:', frameworks);
+                
+                // Test dashboard
+                console.log('Testing dashboard...');
+                const dashboardResponse = await fetch('http://localhost:8000/api/compliance/dashboard/b5a34426-5012-4f6e-b987-3d75db56af38');
+                const dashboard = await dashboardResponse.json();
+                console.log('Dashboard:', dashboard);
+                
+                resultDiv.innerHTML = `
+                    <h3>Frameworks (${frameworks.length}):</h3>
+                    <pre>${JSON.stringify(frameworks, null, 2)}</pre>
+                    <h3>Dashboard:</h3>
+                    <pre>${JSON.stringify(dashboard, null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

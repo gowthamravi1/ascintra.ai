@@ -1,0 +1,81 @@
+rules:
+  - id: dora-backup-enabled
+    description: "Critical databases must have automated backups enabled"
+    type: aws_rds_instance
+    field: backup_enabled
+    expected: true
+    severity: high
+    category: ICT Risk Management
+
+  - id: dora-encryption-at-rest
+    description: "All storage resources must be encrypted at rest"
+    type: aws_s3_bucket
+    field: encryption_enabled
+    expected: true
+    severity: high
+    category: ICT Risk Management
+
+  - id: dora-multi-region-deployment
+    description: "Critical workloads must be deployed in more than one region"
+    type: aws_ec2_instance
+    field: multi_region
+    expected: true
+    severity: high
+    category: Operational Resilience
+
+  - id: dora-logging-enabled
+    description: "All resources must have logging enabled"
+    type: aws_cloudtrail
+    field: enabled
+    expected: true
+    severity: medium
+    category: ICT Incident Reporting
+
+  - id: dora-monitoring-enabled
+    description: "All production services must be monitored with alarms configured"
+    type: aws_cloudwatch_alarm
+    field: enabled
+    expected: true
+    severity: medium
+    category: ICT Incident Reporting
+
+  - id: dora-iam-mfa
+    description: "All IAM users must have MFA enabled"
+    type: aws_iam_user
+    field: mfa_enabled
+    expected: true
+    severity: high
+    category: ICT Risk Management
+
+  - id: dora-network-redundancy
+    description: "VPCs must span multiple availability zones"
+    type: aws_vpc
+    field: multi_az
+    expected: true
+    severity: high
+    category: Operational Resilience
+
+  - id: dora-incident-response-plan
+    description: "Incident response alarms must trigger notifications"
+    type: aws_sns_topic
+    field: has_subscriptions
+    expected: true
+    severity: medium
+    category: ICT Incident Reporting
+
+  - id: dora-thirdparty-inventory
+    description: "External service dependencies must be documented"
+    type: external_service
+    field: documented
+    expected: true
+    severity: medium
+    category: Third-Party Risk Management
+
+  - id: dora-critical-resources-tagged
+    description: "Critical systems must be tagged with 'critical:true'"
+    type: any
+    field: tags.critical
+    expected: true
+    severity: medium
+    category: ICT Risk Management
+

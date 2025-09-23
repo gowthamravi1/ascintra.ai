@@ -22,7 +22,10 @@ import {
   Calendar,
   Download,
   RefreshCw,
+  Play,
+  Loader2,
 } from "lucide-react"
+import { useComplianceData } from "@/hooks/use-compliance-data"
 
 const cloudProviders = [
   { value: "aws", label: "AWS" },
@@ -111,10 +114,72 @@ export default function ComplianceDashboardPage() {
   const [selectedProvider, setSelectedProvider] = useState("aws")
   const [selectedRegion, setSelectedRegion] = useState("")
   const [selectedServices, setSelectedServices] = useState<string[]>([])
+  const [evaluating, setEvaluating] = useState(false)
+
+  // Use a default account ID for now - in a real app, this would come from context/auth
+  const accountId = "b5a34426-5012-4f6e-b987-3d75db56af38"
+  
+  const {
+    frameworks,
+    rules,
+    scores,
+    dashboard,
+    loading,
+    error,
+    refreshData,
+    evaluateCompliance,
+  } = useComplianceData(accountId)
 
   const handleServiceToggle = (serviceValue: string) => {
     setSelectedServices((prev) =>
       prev.includes(serviceValue) ? prev.filter((s) => s !== serviceValue) : [...prev, serviceValue],
+    )
+  }
+
+  const handleEvaluateCompliance = async (frameworkId?: string) => {
+    setEvaluating(true)
+    try {
+      await evaluateCompliance(frameworkId, true)
+    } catch (err) {
+      console.error('Evaluation failed:', err)
+    } finally {
+      setEvaluating(false)
+    }
+  }
+
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return "text-green-600"
+    if (score >= 70) return "text-yellow-600"
+    return "text-red-600"
+  }
+
+  const getScoreBadgeVariant = (score: number) => {
+    if (score >= 90) return "default"
+    if (score >= 70) return "secondary"
+    return "destructive"
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading compliance data...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <p className="text-red-600">{error}</p>
+          <Button onClick={refreshData} className="mt-4">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
     )
   }
 
@@ -126,11 +191,24 @@ export default function ComplianceDashboardPage() {
           <p className="text-muted-foreground">Monitor DORA and SOC 2 Type II compliance across your infrastructure</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            className="gap-2 bg-transparent"
+            onClick={() => handleEvaluateCompliance()}
+            disabled={evaluating}
+          >
+            {evaluating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            {evaluating ? 'Evaluating...' : 'Run Evaluation'}
+          </Button>
           <Button variant="outline" className="gap-2 bg-transparent">
             <Download className="h-4 w-4" />
             Export Report
           </Button>
-          <Button variant="outline" className="gap-2 bg-transparent">
+          <Button variant="outline" className="gap-2 bg-transparent" onClick={refreshData}>
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
@@ -200,578 +278,369 @@ export default function ComplianceDashboardPage() {
         </CardContent>
       </Card>
 
+      {/* Compliance Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Overall Score
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${getScoreColor(dashboard?.overall_score || 0)}`}>
+              {dashboard?.overall_score?.toFixed(1) || 0}%
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant={getScoreBadgeVariant(dashboard?.overall_score || 0)}>
+                {dashboard?.overall_score >= 90 ? 'Excellent' : 
+                 dashboard?.overall_score >= 70 ? 'Good' : 'Needs Improvement'}
+              </Badge>
+            </div>
+            <div className="mt-3">
+              <Progress value={dashboard?.overall_score || 0} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Critical Issues
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{dashboard?.critical_issues || 0}</div>
+            <div className="text-sm text-muted-foreground mt-2">
+              Rules failed
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Resources Evaluated
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboard?.total_resources_evaluated || 0}</div>
+            <div className="text-sm text-muted-foreground mt-2">
+              Total resources
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Gauge className="h-4 w-4" />
+              Frameworks
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{frameworks.length}</div>
+            <div className="text-sm text-muted-foreground mt-2">
+              Active frameworks
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Tabs */}
-      <Tabs defaultValue="dora" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="dora">DORA (Sections 9, 10, 11)</TabsTrigger>
-          <TabsTrigger value="soc2">SOC 2 Type II (RECOVER)</TabsTrigger>
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="dora">DORA</TabsTrigger>
+          <TabsTrigger value="soc2">SOC 2</TabsTrigger>
         </TabsList>
 
-        {/* DORA Tab - Sections 9, 10, 11 Only */}
-        <TabsContent value="dora" className="space-y-6">
-          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h3 className="font-semibold text-blue-900">DORA Compliance Focus Areas</h3>
-            <p className="text-sm text-blue-700 mt-1">
-              Section 9: Backup & Recovery | Section 10: Business Continuity | Section 11: Incident Response
-            </p>
-          </div>
-
-          {/* Recovery Posture Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Recovery Time Objective (RTO) */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Recovery Time Objective (RTO)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">4h</div>
-                <div className="flex items-center gap-2 mt-2">
-                  <TrendingDown className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-600">Target: 6h</span>
-                </div>
-                <div className="mt-3">
-                  <Progress value={67} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recovery Point Objective (RPO) */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  Recovery Point Objective (RPO)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">15m</div>
-                <div className="flex items-center gap-2 mt-2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-600">Target: 30m</span>
-                </div>
-                <div className="mt-3">
-                  <Progress value={85} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Business Continuity Score */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Activity className="h-4 w-4" />
-                  Business Continuity Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">94%</div>
-                <div className="flex items-center gap-2 mt-2">
-                  <TrendingUp className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-600">+3% this month</span>
-                </div>
-                <div className="mt-3">
-                  <Progress value={94} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Incident Response Readiness */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Incident Response Readiness
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">78%</div>
-                <div className="flex items-center gap-2 mt-2">
-                  <TrendingUp className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm text-orange-600">Needs improvement</span>
-                </div>
-                <div className="mt-3">
-                  <Progress value={78} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recovery Testing and Validation */}
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recovery Test Results */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Recovery Test Results (Section 9)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Successful Recovery Tests</span>
-                    <span className="text-sm font-bold text-green-600">89%</span>
-                  </div>
-                  <Progress value={89} className="h-3" />
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Partial Recovery Tests</span>
-                    <span className="text-sm font-bold text-orange-600">8%</span>
-                  </div>
-                  <Progress value={8} className="h-3" />
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Failed Recovery Tests</span>
-                    <span className="text-sm font-bold text-red-600">3%</span>
-                  </div>
-                  <Progress value={3} className="h-3" />
-
-                  <div className="pt-2 border-t">
-                    <div className="text-sm text-muted-foreground">
-                      Last Test: {new Date().toLocaleDateString()} | Next Test:{" "}
-                      {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Business Impact Analysis */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Business Impact Analysis (Section 10)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                  <div>
-                    <div className="text-sm font-medium">Critical Services</div>
-                    <div className="text-2xl font-bold">24</div>
-                  </div>
-                  <div className="text-sm text-red-600">RTO: 1h</div>
-                </div>
-
-                <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-                  <div>
-                    <div className="text-sm font-medium">Important Services</div>
-                    <div className="text-2xl font-bold">67</div>
-                  </div>
-                  <div className="text-sm text-orange-600">RTO: 4h</div>
-                </div>
-
-                <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                  <div>
-                    <div className="text-sm font-medium">Standard Services</div>
-                    <div className="text-2xl font-bold">156</div>
-                  </div>
-                  <div className="text-sm text-green-600">RTO: 24h</div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Incident Response Capabilities */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Incident Response Metrics */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  Incident Response Metrics (Section 11)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <div className="text-sm font-medium">Mean Time to Detection (MTTD)</div>
-                      <div className="text-xl font-bold">12m</div>
-                    </div>
-                    <TrendingDown className="h-6 w-6 text-green-500" />
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <div className="text-sm font-medium">Mean Time to Response (MTTR)</div>
-                      <div className="text-xl font-bold">28m</div>
-                    </div>
-                    <TrendingDown className="h-6 w-6 text-green-500" />
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <div className="text-sm font-medium">Mean Time to Recovery (MTTR)</div>
-                      <div className="text-xl font-bold">2.4h</div>
-                    </div>
-                    <TrendingUp className="h-6 w-6 text-orange-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recovery Capabilities Assessment */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Gauge className="h-5 w-5" />
-                  Recovery Capabilities Assessment
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Backup Infrastructure</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={95} className="w-16 h-2" />
-                      <span className="text-sm font-bold">95%</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Recovery Automation</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={82} className="w-16 h-2" />
-                      <span className="text-sm font-bold">82%</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Disaster Recovery Plans</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={88} className="w-16 h-2" />
-                      <span className="text-sm font-bold">88%</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Communication Protocols</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={76} className="w-16 h-2" />
-                      <span className="text-sm font-bold">76%</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* SOC 2 Type II Tab - RECOVER Functions Only */}
-        <TabsContent value="soc2" className="space-y-6">
-          <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-            <h3 className="font-semibold text-purple-900">SOC 2 Type II - RECOVER Functions</h3>
-            <p className="text-sm text-purple-700 mt-1">
-              Recovery planning, implementation, and improvement activities for Cloud Recovery Posture Management
-            </p>
-          </div>
-
-          {/* Recovery Planning and Implementation */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Recovery Plan Coverage */}
+            {/* Frameworks Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
-                  Recovery Plan Coverage
+                  Compliance Frameworks
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex justify-center">
-                    <div className="relative w-32 h-32">
-                      <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 36 36">
-                        <path
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          fill="none"
-                          stroke="#e5e7eb"
-                          strokeWidth="2"
-                        />
-                        <path
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          fill="none"
-                          stroke="#10b981"
-                          strokeWidth="2"
-                          strokeDasharray="91, 100"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xl font-bold">91%</span>
+                  {frameworks.map((framework) => {
+                    const frameworkScore = scores.find(s => s.framework_id === framework.id)
+                    return (
+                      <div key={framework.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <div className="font-medium">{framework.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {framework.version} • {framework.enabled_rules} rules
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-lg font-bold ${getScoreColor(frameworkScore?.compliance_score || 0)}`}>
+                            {frameworkScore?.compliance_score?.toFixed(1) || 'N/A'}%
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEvaluateCompliance(framework.id)}
+                            disabled={evaluating}
+                          >
+                            {evaluating ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Play className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-muted-foreground">247 of 271 critical systems covered</div>
-                  </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Recovery Process Maturity */}
+            {/* Recent Evaluations */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  Recovery Process Maturity
+                  <Clock className="h-5 w-5" />
+                  Recent Evaluations
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-green-100 flex items-center justify-center">
-                    <CheckCircle className="h-8 w-8 text-green-600" />
+                {dashboard?.recent_evaluations?.length ? (
+                  <div className="space-y-3">
+                    {dashboard.recent_evaluations.slice(0, 5).map((evaluation) => (
+                      <div key={evaluation.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <div className="font-medium">
+                            {new Date(evaluation.evaluation_date).toLocaleDateString()}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {evaluation.passed_rules}/{evaluation.total_rules} rules passed
+                          </div>
+                        </div>
+                        <div className={`text-lg font-bold ${getScoreColor(evaluation.compliance_score)}`}>
+                          {evaluation.compliance_score.toFixed(1)}%
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <div className="text-lg font-bold">Level 4</div>
-                    <div className="text-sm text-muted-foreground">Managed & Measurable</div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Clock className="h-8 w-8 mx-auto mb-2" />
+                    <p>No evaluations yet</p>
+                    <Button 
+                      size="sm" 
+                      className="mt-2"
+                      onClick={() => handleEvaluateCompliance()}
+                      disabled={evaluating}
+                    >
+                      Run First Evaluation
+                    </Button>
                   </div>
-                  <div className="text-xs text-green-600">Automated recovery processes with continuous improvement</div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recovery Testing Frequency */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Recovery Testing Frequency
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-blue-100 flex items-center justify-center">
-                    <Clock className="h-8 w-8 text-blue-600" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold">Monthly</div>
-                    <div className="text-sm text-muted-foreground">Automated Testing</div>
-                  </div>
-                  <div className="text-xs text-blue-600">Last test: 3 days ago | Next: 27 days</div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Recovery Implementation Status */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recovery Strategy Implementation */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Server className="h-5 w-5" />
-                  Recovery Strategy Implementation
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Hot Site Recovery</span>
-                      <span className="text-sm font-bold">100%</span>
-                    </div>
-                    <Progress value={100} className="h-2" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Warm Site Recovery</span>
-                      <span className="text-sm font-bold">87%</span>
-                    </div>
-                    <Progress value={87} className="h-2" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Cold Site Recovery</span>
-                      <span className="text-sm font-bold">94%</span>
-                    </div>
-                    <Progress value={94} className="h-2" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Cloud-to-Cloud Recovery</span>
-                      <span className="text-sm font-bold">78%</span>
-                    </div>
-                    <Progress value={78} className="h-2" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recovery Communication Plan */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  Recovery Communication Plan
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Stakeholder Notification</div>
-                      <div className="text-sm text-muted-foreground">Automated alerts configured</div>
-                    </div>
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Customer Communication</div>
-                      <div className="text-sm text-muted-foreground">Multi-channel messaging ready</div>
-                    </div>
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Regulatory Reporting</div>
-                      <div className="text-sm text-muted-foreground">Templates need update</div>
-                    </div>
-                    <AlertTriangle className="h-5 w-5 text-orange-600" />
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Media Relations</div>
-                      <div className="text-sm text-muted-foreground">Crisis communication plan active</div>
-                    </div>
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recovery Improvement Activities */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Lessons Learned Implementation */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Lessons Learned Implementation
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Q4 2023 Recovery Exercise</div>
-                      <div className="text-sm text-muted-foreground">12 improvements identified</div>
-                    </div>
-                    <Badge variant="default">Implemented</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Security Incident Response</div>
-                      <div className="text-sm text-muted-foreground">8 process enhancements</div>
-                    </div>
-                    <Badge variant="default">Implemented</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Cloud Migration Recovery</div>
-                      <div className="text-sm text-muted-foreground">5 automation improvements</div>
-                    </div>
-                    <Badge variant="secondary">In Progress</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Third-Party Integration</div>
-                      <div className="text-sm text-muted-foreground">3 vendor process updates</div>
-                    </div>
-                    <Badge variant="outline">Planned</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recovery Metrics & KPIs */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Recovery Metrics & KPIs
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">99.8%</div>
-                      <div className="text-sm text-muted-foreground">Recovery Success Rate</div>
-                    </div>
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">2.1h</div>
-                      <div className="text-sm text-muted-foreground">Avg Recovery Time</div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold text-purple-600">15m</div>
-                      <div className="text-sm text-muted-foreground">Max Data Loss (RPO)</div>
-                    </div>
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold text-orange-600">94%</div>
-                      <div className="text-sm text-muted-foreground">Plan Effectiveness</div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t">
-                    <div className="text-center">
-                      <Button variant="outline" size="sm">
-                        View Detailed Metrics
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recovery Posture Summary */}
+          {/* Rules Summary */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Gauge className="h-5 w-5" />
-                Cloud Recovery Posture Management (CRPM) Summary
+                <BarChart3 className="h-5 w-5" />
+                Compliance Rules Summary
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">A+</div>
-                  <div className="text-sm text-muted-foreground">Overall Recovery Grade</div>
-                </div>
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">247</div>
-                  <div className="text-sm text-muted-foreground">Protected Resources</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">12</div>
-                  <div className="text-sm text-muted-foreground">Recovery Strategies</div>
-                </div>
-                <div className="text-center p-4 bg-orange-50 rounded-lg">
-                  <div className="text-2xl font-bold text-orange-600">3</div>
-                  <div className="text-sm text-muted-foreground">Improvement Areas</div>
-                </div>
-              </div>
-              <div className="mt-4 text-center">
-                <Button variant="outline">Generate CRPM Report</Button>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {frameworks.map((framework) => {
+                  const frameworkRules = rules.filter(r => r.framework_id === framework.id)
+                  const enabledRules = frameworkRules.filter(r => r.enabled)
+                  const criticalRules = enabledRules.filter(r => r.severity === 'high')
+                  
+                  return (
+                    <div key={framework.id} className="p-4 border rounded-lg">
+                      <div className="font-medium mb-2">{framework.name}</div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Total Rules:</span>
+                          <span className="font-medium">{frameworkRules.length}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Enabled:</span>
+                          <span className="font-medium text-green-600">{enabledRules.length}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Critical:</span>
+                          <span className="font-medium text-red-600">{criticalRules.length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* DORA Tab */}
+        <TabsContent value="dora" className="space-y-6">
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h3 className="font-semibold text-blue-900">DORA Compliance Framework</h3>
+            <p className="text-sm text-blue-700 mt-1">
+              Digital Operational Resilience Act (DORA) compliance for ICT risk management
+            </p>
+          </div>
+
+          {scores.find(s => s.framework_name === 'DORA') ? (
+            <div className="space-y-6">
+              {/* DORA Score */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    DORA Compliance Score
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center space-y-4">
+                    <div className={`text-4xl font-bold ${getScoreColor(scores.find(s => s.framework_name === 'DORA')?.compliance_score || 0)}`}>
+                      {scores.find(s => s.framework_name === 'DORA')?.compliance_score.toFixed(1) || 0}%
+                    </div>
+                    <div className="text-muted-foreground">
+                      {scores.find(s => s.framework_name === 'DORA')?.passed_rules || 0} of {scores.find(s => s.framework_name === 'DORA')?.total_rules || 0} rules passed
+                    </div>
+                    <Progress 
+                      value={scores.find(s => s.framework_name === 'DORA')?.compliance_score || 0} 
+                      className="h-3" 
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* DORA Categories */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    DORA Categories
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {Object.entries(scores.find(s => s.framework_name === 'DORA')?.categories || {}).map(([category, stats]) => (
+                      <div key={category} className="p-4 border rounded-lg">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium">{category}</span>
+                          <span className={`font-bold ${getScoreColor(stats.score)}`}>
+                            {stats.score.toFixed(1)}%
+                          </span>
+                        </div>
+                        <Progress value={stats.score} className="h-2" />
+                        <div className="flex justify-between text-sm text-muted-foreground mt-2">
+                          <span>{stats.passed} passed</span>
+                          <span>{stats.failed} failed</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="text-center py-8">
+                <Shield className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-muted-foreground mb-4">No DORA evaluation data available</p>
+                <Button onClick={() => handleEvaluateCompliance()}>
+                  Run DORA Evaluation
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* SOC 2 Tab */}
+        <TabsContent value="soc2" className="space-y-6">
+          <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+            <h3 className="font-semibold text-purple-900">SOC 2 Type II Compliance</h3>
+            <p className="text-sm text-purple-700 mt-1">
+              SOC 2 Type II compliance for security, availability, processing integrity, confidentiality, and privacy
+            </p>
+          </div>
+
+          {scores.find(s => s.framework_name === 'SOC 2') ? (
+            <div className="space-y-6">
+              {/* SOC 2 Score */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    SOC 2 Compliance Score
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center space-y-4">
+                    <div className={`text-4xl font-bold ${getScoreColor(scores.find(s => s.framework_name === 'SOC 2')?.compliance_score || 0)}`}>
+                      {scores.find(s => s.framework_name === 'SOC 2')?.compliance_score.toFixed(1) || 0}%
+                    </div>
+                    <div className="text-muted-foreground">
+                      {scores.find(s => s.framework_name === 'SOC 2')?.passed_rules || 0} of {scores.find(s => s.framework_name === 'SOC 2')?.total_rules || 0} rules passed
+                    </div>
+                    <Progress 
+                      value={scores.find(s => s.framework_name === 'SOC 2')?.compliance_score || 0} 
+                      className="h-3" 
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* SOC 2 Categories */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    SOC 2 Categories
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {Object.entries(scores.find(s => s.framework_name === 'SOC 2')?.categories || {}).map(([category, stats]) => (
+                      <div key={category} className="p-4 border rounded-lg">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium">{category}</span>
+                          <span className={`font-bold ${getScoreColor(stats.score)}`}>
+                            {stats.score.toFixed(1)}%
+                          </span>
+                        </div>
+                        <Progress value={stats.score} className="h-2" />
+                        <div className="flex justify-between text-sm text-muted-foreground mt-2">
+                          <span>{stats.passed} passed</span>
+                          <span>{stats.failed} failed</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="text-center py-8">
+                <Shield className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-muted-foreground mb-4">No SOC 2 evaluation data available</p>
+                <Button onClick={() => handleEvaluateCompliance()}>
+                  Run SOC 2 Evaluation
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.models.discovery import (
     ScanItem,
     ScanSummary,
@@ -9,6 +9,8 @@ from app.models.discovery import (
     ScanDetailResponse,
     Findings,
 )
+from app.services.discovery_service import DiscoveryService
+from app.services.scan_progress_service import ScanProgressService
 
 router = APIRouter(prefix="/api/tenant/discovery/history", tags=["discovery-history"])
 
@@ -130,3 +132,31 @@ def trigger_scan(account_identifier: str) -> ScanDetailResponse:
     from app.services.discovery_service import DiscoveryService
 
     return DiscoveryService().run_scan_for_account_by_identifier(account_identifier, triggered_by="manual")
+
+
+@router.get("/progress/{scan_id}")
+def get_scan_progress(scan_id: str):
+    """Get real-time progress for a running scan."""
+    try:
+        progress_service = ScanProgressService()
+        progress_data = progress_service.get_scan_progress(scan_id)
+        
+        if not progress_data:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        
+        return {
+            "scan_id": scan_id,
+            "status": progress_data.get("status", "unknown"),
+            "current_phase": progress_data.get("current_phase", "unknown"),
+            "phase_progress": progress_data.get("phase_progress", 0),
+            "overall_progress": progress_data.get("progress", 0),
+            "total_phases": progress_data.get("total_phases", 1),
+            "estimated_completion": progress_data.get("estimated_completion"),
+            "current_phase_start": progress_data.get("current_phase_start"),
+            "resources_scanned": progress_data.get("resources_scanned", 0),
+            "error_message": progress_data.get("error_message"),
+            "scan_metadata": progress_data.get("scan_metadata", {}),
+            "updated_at": progress_data.get("updated_at")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get scan progress: {str(e)}")

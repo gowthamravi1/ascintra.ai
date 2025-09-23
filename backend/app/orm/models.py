@@ -59,6 +59,7 @@ class DiscoveryScan(Base):
     scan_id = Column(String, nullable=False, unique=True)  # e.g., scan-001
     account_id = Column(UUID(as_uuid=True), ForeignKey("cloud_accounts.id", ondelete="CASCADE"), nullable=False)
 
+    # Legacy fields (keeping for backward compatibility)
     type = Column(String, nullable=False)  # full | incremental | compliance | backup-validation
     status = Column(String, nullable=False)  # completed | running | failed | cancelled
     start_time = Column(DateTime(timezone=True), nullable=False)
@@ -72,6 +73,16 @@ class DiscoveryScan(Base):
     triggered_by = Column(String)
     region = Column(String)
     progress = Column(Integer)
+    
+    # New progress tracking fields
+    scan_type = Column(String, nullable=False)  # inventory | vulnerability | compliance | backup_validation | drift_detection | cost_optimization
+    current_phase = Column(String)  # initializing | discovering | analyzing | materializing | finalizing
+    phase_progress = Column(Integer)  # 0-100 progress within current phase
+    total_phases = Column(Integer, nullable=False)  # Total number of phases for this scan type
+    current_phase_start = Column(DateTime(timezone=True))  # When current phase started
+    estimated_completion = Column(DateTime(timezone=True))  # Estimated completion time
+    error_message = Column(String)  # Error details if scan failed
+    scan_metadata = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))  # Additional scan-specific data
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
@@ -100,3 +111,69 @@ class AssetsInventory(Base):
     __table_args__ = (
         UniqueConstraint("account_id", "service", "kind", "resource_id", name="uq_assets_inventory_asset"),
     )
+
+
+class ComplianceFramework(Base):
+    __tablename__ = "compliance_frameworks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name = Column(String, nullable=False, unique=True)  # e.g., "SOC 2", "DORA"
+    version = Column(String)  # e.g., "Type II", "2024"
+    description = Column(String)
+    enabled = Column(Boolean, nullable=False, server_default=text("true"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class ComplianceRule(Base):
+    __tablename__ = "compliance_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    framework_id = Column(UUID(as_uuid=True), ForeignKey("compliance_frameworks.id", ondelete="CASCADE"), nullable=False)
+    rule_id = Column(String, nullable=False)  # e.g., "soc2-s3-public"
+    category = Column(String, nullable=False)  # e.g., "Security", "ICT Risk Management"
+    description = Column(String, nullable=False)
+    resource_type = Column(String, nullable=False)  # e.g., "aws_s3_bucket", "aws_ec2_instance"
+    field_path = Column(String, nullable=False)  # e.g., "reported.public", "reported.encryption_enabled"
+    operator = Column(String, nullable=False)  # e.g., "equals", "not_equals", "contains", "greater_than"
+    expected_value = Column(JSON)  # The expected value for comparison
+    severity = Column(String, nullable=False)  # e.g., "high", "medium", "low"
+    remediation = Column(String)  # Remediation guidance
+    enabled = Column(Boolean, nullable=False, server_default=text("true"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        UniqueConstraint("framework_id", "rule_id", name="uq_compliance_rules_framework_rule"),
+    )
+
+
+class ComplianceEvaluation(Base):
+    __tablename__ = "compliance_evaluations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    account_id = Column(UUID(as_uuid=True), ForeignKey("cloud_accounts.id", ondelete="CASCADE"), nullable=False)
+    framework_id = Column(UUID(as_uuid=True), ForeignKey("compliance_frameworks.id", ondelete="CASCADE"), nullable=False)
+    evaluation_date = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    total_rules = Column(Integer, nullable=False)
+    passed_rules = Column(Integer, nullable=False)
+    failed_rules = Column(Integer, nullable=False)
+    compliance_score = Column(Float, nullable=False)  # 0-100
+    evaluation_data = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "framework_id", "evaluation_date", name="uq_compliance_evaluations_account_framework_date"),
+    )
+
+
+class ComplianceRuleResult(Base):
+    __tablename__ = "compliance_rule_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    evaluation_id = Column(UUID(as_uuid=True), ForeignKey("compliance_evaluations.id", ondelete="CASCADE"), nullable=False)
+    rule_id = Column(UUID(as_uuid=True), ForeignKey("compliance_rules.id", ondelete="CASCADE"), nullable=False)
+    passed = Column(Boolean, nullable=False)
+    failed_resources = Column(JSON, nullable=False, server_default=text("'[]'::jsonb"))
+    error_message = Column(String)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))

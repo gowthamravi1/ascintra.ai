@@ -42,7 +42,9 @@ class TestConnectionRequest(BaseModel):
     aws_role_arn: Optional[str] = None
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
+    gcp_project_number: Optional[str] = None
     gcp_sa_email: Optional[str] = None
+    credentials_json: Optional[Dict[str, Any]] = None
     # For alignment with UI selections (not validated here)
     discovery_frequency: Optional[str] = None
     preferred_time_utc: Optional[str] = None
@@ -51,3 +53,5 @@ class TestConnectionRequest(BaseModel):
 class TestConnectionResponse(BaseModel):
     ok: bool
     details: Dict[str, Any] = {}
+    loading: bool = False
+    message: Optional[str] = None

@@ -182,10 +182,14 @@ export default function DriftOverviewPage() {
   const [summary, setSummary] = useState(driftSummaryDefault)
   const [rows, setRows] = useState(driftDataDefault)
 
+  const [selectedDriftItem, setSelectedDriftItem] = useState<any>(null)
+  const [driftDetails, setDriftDetails] = useState<any>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
+
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch("/api/tenant/drift/overview", { cache: "no-store" })
+        const res = await fetch("/api/tenant/drift/overview?account_identifier=142141431503", { cache: "no-store" })
         if (!res.ok) return
         const data = await res.json()
         if (data?.summary) setSummary(data.summary)
@@ -194,6 +198,22 @@ export default function DriftOverviewPage() {
     }
     load()
   }, [])
+
+  const handleViewDetails = async (item: any) => {
+    setSelectedDriftItem(item)
+    setLoadingDetails(true)
+    try {
+      const res = await fetch(`/api/tenant/drift/resource/${item.asset_id}?account_identifier=142141431503`)
+      if (res.ok) {
+        const data = await res.json()
+        setDriftDetails(data.data)
+      }
+    } catch (e) {
+      console.error('Failed to load drift details:', e)
+    } finally {
+      setLoadingDetails(false)
+    }
+  }
 
   const handleSelectResource = (resourceId: string) => {
     setSelectedResources((prev) =>
@@ -654,113 +674,109 @@ export default function DriftOverviewPage() {
 
                       <Drawer>
                         <DrawerTrigger asChild>
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" onClick={() => handleViewDetails(item)}>
                             <Eye className="h-3 w-3 mr-1" />
                             View Details
                           </Button>
                         </DrawerTrigger>
                         <DrawerContent>
                           <DrawerHeader>
-                            <DrawerTitle>{item.resourceName} - Configuration Details</DrawerTitle>
+                            <DrawerTitle>{selectedDriftItem?.resource_name || item.resourceName} - Configuration Details</DrawerTitle>
                             <DrawerDescription>Detailed information about the configuration drift</DrawerDescription>
                           </DrawerHeader>
 
                           <div className="px-4 pb-4 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <h4 className="font-medium mb-2">Resource Information</h4>
-                                <div className="space-y-2 text-sm">
-                                  <div>
-                                    <strong>Resource ID:</strong> {item.resourceId}
-                                  </div>
-                                  <div>
-                                    <strong>Service:</strong> {item.service}
-                                  </div>
-                                  <div>
-                                    <strong>Region:</strong> {item.region}
-                                  </div>
-                                  <div>
-                                    <strong>Provider:</strong> {item.provider}
-                                  </div>
-                                </div>
+                            {loadingDetails ? (
+                              <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                                <span className="ml-2">Loading drift details...</span>
                               </div>
-                              <div>
-                                <h4 className="font-medium mb-2">Resource Tags</h4>
-                                <div className="space-y-1">
-                                  {Object.entries(item.tags).map(([key, value]) => (
-                                    <div key={key} className="flex gap-2">
-                                      <Badge variant="outline" className="text-xs">
-                                        {key}: {value}
-                                      </Badge>
+                            ) : driftDetails ? (
+                              <>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <h4 className="font-medium mb-2">Resource Information</h4>
+                                    <div className="space-y-2 text-sm">
+                                      <div>
+                                        <strong>Resource ID:</strong> {driftDetails.resource_id}
+                                      </div>
+                                      <div>
+                                        <strong>Service:</strong> {driftDetails.service}
+                                      </div>
+                                      <div>
+                                        <strong>Region:</strong> {driftDetails.region || 'N/A'}
+                                      </div>
+                                      <div>
+                                        <strong>Provider:</strong> {driftDetails.provider}
+                                      </div>
                                     </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div>
-                              <h4 className="font-medium mb-2">Configuration Comparison</h4>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label className="text-xs text-red-600">Current Configuration</Label>
-                                  <div className="bg-red-50 border border-red-200 p-3 rounded text-sm">
-                                    {item.currentConfig}
                                   </div>
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-green-600">Expected Configuration</Label>
-                                  <div className="bg-green-50 border border-green-200 p-3 rounded text-sm">
-                                    {item.expectedConfig}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div>
-                              <h4 className="font-medium mb-2">Impact Assessment</h4>
-                              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                                <div className="flex items-start gap-2">
-                                  <AlertTriangle className="h-4 w-4 text-orange-600 mt-0.5" />
                                   <div>
-                                    <strong className="text-orange-800">Business Impact:</strong>
-                                    <p className="text-orange-700 text-sm">{item.impact}</p>
+                                    <h4 className="font-medium mb-2">Drift Summary</h4>
+                                    <div className="space-y-2 text-sm">
+                                      <div>
+                                        <strong>Total Changes:</strong> {driftDetails.detailed_comparison?.summary?.total_changes || 0}
+                                      </div>
+                                      <div>
+                                        <strong>High Risk:</strong> {driftDetails.detailed_comparison?.summary?.high_risk_changes || 0}
+                                      </div>
+                                      <div>
+                                        <strong>Medium Risk:</strong> {driftDetails.detailed_comparison?.summary?.medium_risk_changes || 0}
+                                      </div>
+                                      <div>
+                                        <strong>Low Risk:</strong> {driftDetails.detailed_comparison?.summary?.low_risk_changes || 0}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </div>
 
-                            <div>
-                              <h4 className="font-medium mb-2">Recommended Actions</h4>
-                              <div className="space-y-2">
-                                <Button className="w-full justify-start">
-                                  <Wrench className="h-4 w-4 mr-2" />
-                                  Apply automatic fix
-                                </Button>
-                                <Button variant="outline" className="w-full justify-start bg-transparent">
-                                  <Settings className="h-4 w-4 mr-2" />
-                                  Configure drift monitoring
-                                </Button>
-                                <Button variant="outline" className="w-full justify-start bg-transparent">
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  Ignore this drift
-                                </Button>
-                              </div>
-                            </div>
+                                {driftDetails.drift_changes && driftDetails.drift_changes.length > 0 && (
+                                  <div>
+                                    <h4 className="font-medium mb-2">Configuration Changes</h4>
+                                    <div className="space-y-3">
+                                      {driftDetails.drift_changes.map((change: any, index: number) => (
+                                        <div key={index} className="border rounded-lg p-3">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="font-medium">{change.field}</span>
+                                            <Badge variant="outline">{change.change_type}</Badge>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                              <Label className="text-xs text-red-600">Current Value</Label>
+                                              <div className="bg-red-50 border border-red-200 p-2 rounded text-xs font-mono">
+                                                {JSON.stringify(change.current_value, null, 2)}
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <Label className="text-xs text-green-600">Historical Value</Label>
+                                              <div className="bg-green-50 border border-green-200 p-2 rounded text-xs font-mono">
+                                                {JSON.stringify(change.historical_value, null, 2)}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
 
-                            <div>
-                              <h4 className="font-medium mb-2">Timeline</h4>
-                              <div className="text-sm space-y-1">
                                 <div>
-                                  <strong>First Detected:</strong> {new Date(item.detectedAt).toLocaleString()}
+                                  <h4 className="font-medium mb-2">Timeline</h4>
+                                  <div className="space-y-2">
+                                    {driftDetails.history_timeline?.map((entry: any, index: number) => (
+                                      <div key={index} className="flex items-center justify-between text-sm border-b pb-2">
+                                        <span>{new Date(entry.timestamp).toLocaleString()}</span>
+                                        <Badge variant="outline">{entry.changes} changes</Badge>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
-                                <div>
-                                  <strong>Current Status:</strong> <Badge variant="destructive">Active Drift</Badge>
-                                </div>
-                                <div>
-                                  <strong>Last Checked:</strong> {new Date().toLocaleString()}
-                                </div>
+                              </>
+                            ) : (
+                              <div className="text-center py-8 text-muted-foreground">
+                                No drift details available
                               </div>
-                            </div>
+                            )}
                           </div>
 
                           <DrawerFooter>

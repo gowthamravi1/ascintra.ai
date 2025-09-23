@@ -24,9 +24,9 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 
-export default function ConnectAWSAccount() {
+export default function ConnectCloudAccount() {
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState(1)
+  const [currentStep, setCurrentStep] = useState(0)
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "connecting" | "success" | "error">("idle")
   const [accountId, setAccountId] = useState("")
@@ -37,6 +37,7 @@ export default function ConnectAWSAccount() {
   const [awsSecretAccessKey, setAwsSecretAccessKey] = useState("")
   const [discFreq, setDiscFreq] = useState("Every 6 hours")
   const [prefTime, setPrefTime] = useState("02:00")
+  const [selectedProvider, setSelectedProvider] = useState<"aws" | "gcp" | null>(null)
 
   const handleConnect = async () => {
     setIsConnecting(true)
@@ -67,8 +68,9 @@ export default function ConnectAWSAccount() {
   }
 
   const steps = [
-    { id: 1, title: "Account Setup", description: "Configure AWS account details" },
-    { id: 2, title: "IAM Role Creation", description: "Create required IAM role" },
+    { id: 0, title: "Provider Selection", description: "Choose your cloud provider" },
+    { id: 1, title: "Account Setup", description: "Configure account details" },
+    { id: 2, title: "Authentication", description: "Set up authentication" },
     { id: 3, title: "Connection Test", description: "Verify connectivity" },
     { id: 4, title: "Discovery Setup", description: "Configure resource discovery" },
   ]
@@ -121,10 +123,10 @@ export default function ConnectAWSAccount() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-            Connect AWS Account
+            Connect Cloud Account
           </h1>
           <p className="text-gray-600 mt-2">
-            Securely connect your AWS account to enable resource discovery and backup monitoring
+            Securely connect your cloud account to enable resource discovery and backup monitoring
           </p>
         </div>
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
@@ -170,6 +172,87 @@ export default function ConnectAWSAccount() {
       </Card>
 
       {/* Step Content */}
+      {currentStep === 0 && (
+        <Card className="bg-white/80 backdrop-blur-sm border-white/20 shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-blue-600" />
+              Choose Cloud Provider
+            </CardTitle>
+            <CardDescription>Select the cloud provider you want to connect</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div
+                className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
+                  selectedProvider === "aws"
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => setSelectedProvider("aws")}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <Cloud className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">Amazon Web Services</h3>
+                    <p className="text-sm text-gray-600">Connect your AWS account</p>
+                  </div>
+                </div>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• EC2, RDS, S3, EBS discovery</li>
+                  <li>• AWS Backup integration</li>
+                  <li>• IAM role-based authentication</li>
+                </ul>
+              </div>
+
+              <div
+                className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
+                  selectedProvider === "gcp"
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => setSelectedProvider("gcp")}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Cloud className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">Google Cloud Platform</h3>
+                    <p className="text-sm text-gray-600">Connect your GCP project</p>
+                  </div>
+                </div>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Compute Engine, Cloud SQL, Storage</li>
+                  <li>• Cloud Backup integration</li>
+                  <li>• Service account authentication</li>
+                </ul>
+              </div>
+            </div>
+
+            {selectedProvider && (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  onClick={() => {
+                    if (selectedProvider === "gcp") {
+                      router.push("/tenant/discovery/connect-gcp")
+                    } else {
+                      setCurrentStep(1)
+                    }
+                  }}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                >
+                  Continue with {selectedProvider === "aws" ? "AWS" : "GCP"}
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {currentStep === 1 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Card className="bg-white/80 backdrop-blur-sm border-white/20 shadow-lg">
@@ -264,7 +347,7 @@ export default function ConnectAWSAccount() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Key className="h-5 w-5 text-orange-600" />
-              IAM Role Creation
+              AWS IAM Role Creation
             </CardTitle>
             <CardDescription>
               Create an IAM role in your AWS account to allow RecoveryVault secure access
