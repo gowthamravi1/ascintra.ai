@@ -28,6 +28,7 @@ type OverviewMetrics = {
   active_alerts: number
   running_scans: number
   compliance_status: number
+  compliance_frameworks: string[]
   system_status: string
 }
 
@@ -211,12 +212,20 @@ export default function TenantOverviewPage() {
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{metrics?.compliance_status || 0}%</div>
             <div className="flex items-center space-x-1 mt-2">
-              <Badge variant="outline" className="text-xs">
-                SOC 2
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                DORA
-              </Badge>
+              {metrics?.compliance_frameworks?.map((framework, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {framework}
+                </Badge>
+              )) || (
+                <>
+                  <Badge variant="outline" className="text-xs">
+                    SOC 2
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    DORA
+                  </Badge>
+                </>
+              )}
             </div>
             <p className="text-xs text-gray-600 mt-1">
               {metrics?.compliance_status && metrics.compliance_status >= 95 ? 'Excellent compliance' : 

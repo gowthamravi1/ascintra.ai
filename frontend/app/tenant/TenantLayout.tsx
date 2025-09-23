@@ -122,7 +122,7 @@ const createNavigation = (navData: any): NavigationItem[] => [
     badge: navData?.compliance?.badge || "N/A",
     children: [
       { name: "Compliance Dashboard", href: "/tenant/compliance", icon: LayoutDashboard },
-      { name: "Audit Reports", href: "/tenant/compliance/audit", icon: FileText },
+      { name: "Audit Reports", href: "/tenant/compliance/audit", icon: FileText, warning: "Mock Screen" },
       { name: "Policy Management", href: "/tenant/compliance/policies", icon: Settings },
     ],
   },
@@ -263,14 +263,9 @@ export function TenantLayout({ children }: TenantLayoutProps) {
                       <child.icon className="mr-3 h-4 w-4 flex-shrink-0" />
                       <span className="flex-1">{child.name}</span>
                       {child.warning && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{child.warning}</p>
-                          </TooltipContent>
-                        </Tooltip>
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-mono flex-shrink-0">
+                          MOCK
+                        </span>
                       )}
                     </Link>
                   ))}

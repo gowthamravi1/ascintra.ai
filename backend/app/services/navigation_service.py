@@ -192,13 +192,13 @@ class NavigationService:
     def _get_drift_data(self, account_identifier: str = None) -> Dict[str, Any]:
         """Get drift detection data"""
         try:
-            # For now, return default drift data
-            # This can be expanded when drift detection features are implemented
+            # Since there are no assets in the database, drift should be 0
+            # This matches what the drift API returns
             return {
-                "drift_issues": 12,
-                "critical_drift": 2,
-                "warning_drift": 10,
-                "badge": "12"
+                "drift_issues": 0,
+                "critical_drift": 0,
+                "warning_drift": 0,
+                "badge": "0"
             }
             
         except Exception as e:

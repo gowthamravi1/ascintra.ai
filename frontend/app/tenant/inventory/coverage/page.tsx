@@ -591,7 +591,10 @@ export default function BackupCoveragePage() {
         <TabsContent value="trends" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Coverage Trends</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Coverage Trends
+                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-mono">MOCK</span>
+              </CardTitle>
               <CardDescription>Backup coverage evolution over the past 6 months</CardDescription>
             </CardHeader>
             <CardContent>

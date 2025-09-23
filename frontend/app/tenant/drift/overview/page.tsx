@@ -43,6 +43,7 @@ import {
   Wrench,
   Play,
   Pause,
+  RefreshCw,
 } from "lucide-react"
 
 // Mock defaults; will be replaced by API values
@@ -179,8 +180,17 @@ export default function DriftOverviewPage() {
   const [notificationEmail, setNotificationEmail] = useState("")
   const [scheduleNotes, setScheduleNotes] = useState("")
   const [selectedRecommendations, setSelectedRecommendations] = useState<string[]>([])
-  const [summary, setSummary] = useState(driftSummaryDefault)
-  const [rows, setRows] = useState(driftDataDefault)
+  const [summary, setSummary] = useState({
+    totalResources: 0,
+    driftingResources: 0,
+    criticalDrift: 0,
+    mediumDrift: 0,
+    lowDrift: 0,
+    lastScan: new Date().toISOString(),
+    nextScan: null
+  })
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [selectedDriftItem, setSelectedDriftItem] = useState<any>(null)
   const [driftDetails, setDriftDetails] = useState<any>(null)
@@ -189,12 +199,17 @@ export default function DriftOverviewPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        setLoading(true)
         const res = await fetch("/api/tenant/drift/overview?account_identifier=142141431503", { cache: "no-store" })
         if (!res.ok) return
         const data = await res.json()
         if (data?.summary) setSummary(data.summary)
         if (Array.isArray(data?.items)) setRows(data.items)
-      } catch {}
+      } catch (error) {
+        console.error('Failed to load drift data:', error)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
@@ -291,6 +306,19 @@ export default function DriftOverviewPage() {
       default:
         return <AlertCircle className="h-4 w-4" />
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading drift data...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -555,7 +583,22 @@ export default function DriftOverviewPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((item) => (
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12">
+                    <div className="flex flex-col items-center space-y-4">
+                      <Shield className="h-12 w-12 text-gray-400" />
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900">No Configuration Drift Detected</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          All {summary.totalResources} resources are in compliance with their expected configurations.
+                        </p>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div>
@@ -673,7 +716,7 @@ export default function DriftOverviewPage() {
                       </Dialog>
 
                       <Drawer>
-                        <DrawerTrigger asChild>
+                        <DrawerTrigger>
                           <Button variant="outline" size="sm" onClick={() => handleViewDetails(item)}>
                             <Eye className="h-3 w-3 mr-1" />
                             View Details
@@ -781,7 +824,7 @@ export default function DriftOverviewPage() {
 
                           <DrawerFooter>
                             <Button>Apply Fix</Button>
-                            <DrawerClose asChild>
+                            <DrawerClose>
                               <Button variant="outline">Close</Button>
                             </DrawerClose>
                           </DrawerFooter>
@@ -790,7 +833,8 @@ export default function DriftOverviewPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -801,23 +845,19 @@ export default function DriftOverviewPage() {
         {/* Geographic Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle>Geographic Drift Distribution</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Geographic Drift Distribution
+              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-mono">MOCK</span>
+            </CardTitle>
             <CardDescription>Configuration drift by AWS region</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {geographicData.map((region) => (
-                <div key={region.region} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{region.region}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={getSeverityColor(region.severity)}>{region.severity}</Badge>
-                    <span className="text-sm text-muted-foreground">{region.driftCount} issues</span>
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center">
+                <MapPin className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Geographic drift data not available</p>
+                <p className="text-xs text-gray-400 mt-1">This feature is currently in development</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -827,7 +867,10 @@ export default function DriftOverviewPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Recommendations</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  Recommendations
+                  <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-mono">MOCK</span>
+                </CardTitle>
                 <CardDescription>Suggested actions to improve drift management</CardDescription>
               </div>
               <Dialog>
@@ -891,30 +934,12 @@ export default function DriftOverviewPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recommendations.map((rec) => (
-                <div key={rec.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                  <Checkbox
-                    checked={selectedRecommendations.includes(rec.id)}
-                    onCheckedChange={() => handleSelectRecommendation(rec.id)}
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium">{rec.title}</div>
-                    <div className="text-sm text-muted-foreground mb-2">{rec.description}</div>
-                    <div className="flex gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        {rec.priority} Priority
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {rec.estimatedTime}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {rec.resources} resources
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center">
+                <Settings className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Recommendations not available</p>
+                <p className="text-xs text-gray-400 mt-1">This feature is currently in development</p>
+              </div>
             </div>
           </CardContent>
         </Card>

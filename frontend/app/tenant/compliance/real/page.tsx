@@ -55,7 +55,7 @@ export default function ComplianceDashboardPage() {
   const [evaluating, setEvaluating] = useState(false)
 
   // Use a default account ID for now - in a real app, this would come from context/auth
-  const accountId = "84696d9a-174c-4093-b907-1f331da0d1f5"
+  const accountId = "65af1032-7e1c-4368-bd5f-eda683a2b365"
   
   const {
     frameworks,

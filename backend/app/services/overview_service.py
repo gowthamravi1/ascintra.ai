@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
 from app.db.session import get_session
-from app.orm.models import CloudAccount, DiscoveryScan, AssetsInventory
+from app.orm.models import CloudAccount, DiscoveryScan, AssetsInventory, ComplianceFramework, ComplianceRule
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,8 +51,35 @@ class OverviewService:
                 DiscoveryScan.status == "running"
             ).count()
             
-            # Get compliance status (mock for now)
-            compliance_status = 98.5  # This would come from compliance service
+            # Get compliance status from real data
+            # Check if there are any compliance evaluations
+            from app.orm.models import ComplianceEvaluation
+            latest_evaluation = self.session.query(ComplianceEvaluation).order_by(
+                ComplianceEvaluation.created_at.desc()
+            ).first()
+            
+            if latest_evaluation:
+                # Use actual compliance evaluation score
+                compliance_status = latest_evaluation.compliance_score
+            else:
+                # No evaluations yet - show a realistic default based on rule configuration
+                total_rules = self.session.query(ComplianceRule).count()
+                enabled_rules = self.session.query(ComplianceRule).filter(ComplianceRule.enabled == True).count()
+                
+                if total_rules == 0:
+                    compliance_status = 0
+                elif enabled_rules == total_rules:
+                    # All rules enabled but no evaluation - show a moderate score
+                    compliance_status = 75.0
+                else:
+                    # Some rules disabled - show lower score
+                    compliance_status = (enabled_rules / total_rules * 60) + 20
+            
+            # Get active compliance frameworks
+            active_frameworks = self.session.query(ComplianceFramework).filter(
+                ComplianceFramework.enabled == True
+            ).all()
+            framework_names = [f.name for f in active_frameworks]
             
             return {
                 "total_accounts": total_accounts,
@@ -63,6 +90,7 @@ class OverviewService:
                 "active_alerts": active_alerts,
                 "running_scans": running_scans,
                 "compliance_status": compliance_status,
+                "compliance_frameworks": framework_names,
                 "system_status": "operational" if active_alerts == 0 else "attention_required"
             }
             

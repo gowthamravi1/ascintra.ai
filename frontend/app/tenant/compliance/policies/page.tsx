@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,7 @@ import {
   BookOpen,
   Upload,
   Copy,
+  RefreshCw,
 } from "lucide-react"
 
 export default function CompliancePoliciesPage() {
@@ -43,9 +44,35 @@ export default function CompliancePoliciesPage() {
   const [selectedStatus, setSelectedStatus] = useState("all")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedPolicy, setSelectedPolicy] = useState<any>(null)
+  const [policies, setPolicies] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Mock data for policies
-  const policies = [
+  // Calculate statistics from live data
+  const totalPolicies = policies.length
+  const activePolicies = policies.filter(policy => policy.enabled).length
+  const pendingReview = policies.filter(policy => !policy.enabled).length
+  const acknowledgmentRate = totalPolicies > 0 ? Math.round((activePolicies / totalPolicies) * 100) : 0
+
+  // Load policies from API
+  useEffect(() => {
+    const loadPolicies = async () => {
+      try {
+        setLoading(true)
+        const res = await fetch("/api/compliance/rules", { cache: "no-store" })
+        if (!res.ok) return
+        const data = await res.json()
+        setPolicies(data || [])
+      } catch (error) {
+        console.error('Failed to load compliance rules:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadPolicies()
+  }, [])
+
+  // Mock data for policies (fallback)
+  const mockPolicies = [
     {
       id: "POL-001",
       title: "Data Backup and Recovery Policy",
@@ -137,10 +164,11 @@ export default function CompliancePoliciesPage() {
 
   const filteredPolicies = policies.filter((policy) => {
     const matchesSearch =
-      policy.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      policy.id.toLowerCase().includes(searchTerm.toLowerCase())
+      policy.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      policy.rule_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      policy.category?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === "all" || policy.category === selectedCategory
-    const matchesStatus = selectedStatus === "all" || policy.status === selectedStatus
+    const matchesStatus = selectedStatus === "all" || (selectedStatus === "active" ? policy.enabled : !policy.enabled)
     return matchesSearch && matchesCategory && matchesStatus
   })
 
@@ -161,22 +189,35 @@ export default function CompliancePoliciesPage() {
     )
   }
 
-  const getRiskBadge = (risk: string) => {
-    const riskConfig = {
+  const getRiskBadge = (severity: string) => {
+    const severityConfig = {
       critical: "bg-red-100 text-red-800",
       high: "bg-orange-100 text-orange-800",
       medium: "bg-yellow-100 text-yellow-800",
       low: "bg-green-100 text-green-800",
     }
     return (
-      <Badge className={riskConfig[risk as keyof typeof riskConfig]}>
-        {risk.charAt(0).toUpperCase() + risk.slice(1)}
+      <Badge className={severityConfig[severity as keyof typeof severityConfig] || severityConfig.medium}>
+        {severity.charAt(0).toUpperCase() + severity.slice(1)}
       </Badge>
     )
   }
 
   const getAcknowledgmentProgress = (acknowledged: number, total: number) => {
     return total > 0 ? Math.round((acknowledged / total) * 100) : 0
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading compliance policies...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -284,8 +325,8 @@ export default function CompliancePoliciesPage() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground">+2 from last month</p>
+            <div className="text-2xl font-bold">{totalPolicies}</div>
+            <p className="text-xs text-muted-foreground">Compliance rules configured</p>
           </CardContent>
         </Card>
         <Card>
@@ -294,8 +335,8 @@ export default function CompliancePoliciesPage() {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">18</div>
-            <p className="text-xs text-muted-foreground">75% of total policies</p>
+            <div className="text-2xl font-bold">{activePolicies}</div>
+            <p className="text-xs text-muted-foreground">{totalPolicies > 0 ? Math.round((activePolicies / totalPolicies) * 100) : 0}% of total policies</p>
           </CardContent>
         </Card>
         <Card>
@@ -304,8 +345,8 @@ export default function CompliancePoliciesPage() {
             <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">Due within 30 days</p>
+            <div className="text-2xl font-bold">{pendingReview}</div>
+            <p className="text-xs text-muted-foreground">Disabled policies</p>
           </CardContent>
         </Card>
         <Card>
@@ -314,8 +355,8 @@ export default function CompliancePoliciesPage() {
             <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">92%</div>
-            <p className="text-xs text-muted-foreground">+5% from last quarter</p>
+            <div className="text-2xl font-bold">{acknowledgmentRate}%</div>
+            <p className="text-xs text-muted-foreground">Active compliance rate</p>
           </CardContent>
         </Card>
       </div>
@@ -390,29 +431,47 @@ export default function CompliancePoliciesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPolicies.map((policy) => (
+                    {filteredPolicies.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-12">
+                          <div className="flex flex-col items-center space-y-4">
+                            <FileText className="h-12 w-12 text-gray-400" />
+                            <div>
+                              <h3 className="text-lg font-medium text-gray-900">No Compliance Rules Found</h3>
+                              <p className="text-sm text-gray-500 mt-1">
+                                {policies.length === 0 
+                                  ? "No compliance rules have been configured yet."
+                                  : "No rules match your current filters."
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredPolicies.map((policy) => (
                       <TableRow key={policy.id}>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{policy.title}</div>
+                            <div className="font-medium">{policy.description}</div>
                             <div className="text-sm text-muted-foreground">
-                              {policy.id} • v{policy.version}
+                              {policy.rule_id} • {policy.resource_type}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{policy.category}</Badge>
                         </TableCell>
-                        <TableCell>{getStatusBadge(policy.status)}</TableCell>
-                        <TableCell>{getRiskBadge(policy.riskLevel)}</TableCell>
-                        <TableCell>{policy.owner}</TableCell>
+                        <TableCell>{getStatusBadge(policy.enabled ? 'active' : 'inactive')}</TableCell>
+                        <TableCell>{getRiskBadge(policy.severity)}</TableCell>
+                        <TableCell>System</TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <div className="text-sm">
-                              {policy.acknowledgments}/{policy.totalAssigned}
+                              N/A
                             </div>
                             <Progress
-                              value={getAcknowledgmentProgress(policy.acknowledgments, policy.totalAssigned)}
+                              value={0}
                               className="h-2"
                             />
                           </div>
@@ -432,7 +491,8 @@ export default function CompliancePoliciesPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ))
+                    )}
                   </TableBody>
                 </Table>
               </div>
